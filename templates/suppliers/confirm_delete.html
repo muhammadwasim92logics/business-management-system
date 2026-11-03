@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}Delete Supplier - GBMS{% endblock %}
+{% block page_title %}🗑️ Delete Supplier{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0">Confirm Delete</h5>
+    </div>
+    <div class="card-body">
+        <p>Are you sure you want to delete <strong>{{ supplier.name }}</strong>?</p>
+        <p class="text-danger"><i class="fas fa-exclamation-triangle me-2"></i>This will also delete all purchase records associated with this supplier.</p>
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">
+                <i class="fas fa-trash me-1"></i>Yes, Delete
+            </button>
+            <a href="{% url 'suppliers:list' %}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

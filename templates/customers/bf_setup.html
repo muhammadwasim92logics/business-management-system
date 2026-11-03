@@ -1,0 +1,756 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Bulk B.F Setup - GBMS{% endblock %}
+{% block page_title %}📒 Bulk B.F (Bring Forward) Setup{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-lg-12">
+            <!-- Header Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <h5 class="mb-0">
+                            <i class="fas fa-users me-2"></i>
+                            Bulk B.F Setup - 100 Customers
+                            <small class="text-light ms-2">Add up to 100 customers with opening balance</small>
+                        </h5>
+                        <div>
+                            <span class="badge bg-light text-dark me-2" id="customerCount">0 / 100 Customers</span>
+                            <span class="badge bg-info text-dark" id="rowCountInfo">100 rows</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Messages -->
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                                {{ message|linebreaks }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <!-- Info Alert -->
+                    <div class="alert alert-info d-flex align-items-center">
+                        <i class="fas fa-info-circle fa-2x me-3"></i>
+                        <div>
+                            <strong>Bulk B.F Setup:</strong> Add up to 100 customers at once with their B.F (Bring Forward) 
+                            opening balances and cylinders. Only rows with valid customer name will be saved.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <form method="post" id="bfSetupForm">
+                {% csrf_token %}
+                
+                <!-- Customers Container -->
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <h6 class="mb-0">
+                                <i class="fas fa-list me-2"></i>
+                                Customer List
+                            </h6>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-light btn-sm" onclick="addCustomerRow(true)">
+                                    <i class="fas fa-user-plus me-1"></i>Add One More Customer
+                                </button>
+                                <button type="button" class="btn btn-outline-light btn-sm" onclick="add100DefaultRows()">
+                                    <i class="fas fa-layer-group me-1"></i>Add 100 Default Rows
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="customersContainer" class="customers-scroll-wrapper p-3">
+                            <!-- 100 default customer rows will be added by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Submit Button -->
+                <div class="card mt-4">
+                    <div class="card-body">
+                        <div class="row g-3 align-items-center">
+                            <div class="col-md-8">
+                                <div class="text-muted small">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Only customers with valid name will be saved. Empty rows will be skipped.
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <button type="submit" class="btn btn-success btn-lg w-100" onclick="return validateForm()">
+                                    <i class="fas fa-save me-2"></i>Save All Customers with B.F
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+    // ============================================================
+    // Data
+    // ============================================================
+    var productsData = [
+        {% for product in products %}
+        {id: "{{ product.id }}", name: "{{ product.name|escapejs }}"},
+        {% endfor %}
+    ];
+    
+    var rowCounter = 0;
+    var DEFAULT_ROWS = 100;
+    
+    // ============================================================
+    // Toast Notification
+    // ============================================================
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast-custom ${type}`;
+        const icon = type === 'success' ? 'fa-check-circle' : 
+                     type === 'error' ? 'fa-exclamation-circle' : 
+                     'fa-exclamation-triangle';
+        toast.innerHTML = `
+            <i class="fas ${icon} me-2"></i>
+            ${message}
+            <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+        `;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s';
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
+    }
+    
+    // ============================================================
+    // Product Options HTML
+    // ============================================================
+    function getProductOptions(selectedValue = '') {
+        var options = '<option value="">-- Select Product --</option>';
+        productsData.forEach(function(p) {
+            var selected = p.name === selectedValue ? 'selected' : '';
+            options += '<option value="' + p.name + '" ' + selected + '>' + p.name + '</option>';
+        });
+        return options;
+    }
+    
+    // ============================================================
+    // Add Customer Row
+    // ============================================================
+    function addCustomerRow(scrollToRow = true, data = null) {
+        rowCounter++;
+        var container = document.getElementById('customersContainer');
+        
+        var row = document.createElement('div');
+        row.className = 'customer-row card mb-3 p-3';
+        row.id = 'customer-row-' + rowCounter;
+        
+        var customerName = data ? data.name || '' : '';
+        var customerMobile = data ? data.mobile || '' : '';
+        var bfBalance = data ? data.bf_balance || 0 : 0;
+        var bfDescription = data ? data.bf_description || '' : '';
+        var bfDate = data ? data.bf_date || '{% now "Y-m-d" %}' : '{% now "Y-m-d" %}';
+        var securityDeposit = data ? data.security_deposit || 0 : 0;
+        var personalCylinders = data ? data.personal_cylinders || 0 : 0;
+        var bfCylinders = data ? data.bf_cylinders || {} : {};
+        
+        // Build cylinder rows HTML
+        var cylinderRowsHTML = '';
+        var cylIndex = 0;
+        for (var productName in bfCylinders) {
+            if (bfCylinders[productName] !== 0) {
+                cylIndex++;
+                cylinderRowsHTML += `
+                    <div class="cylinder-row d-flex align-items-center gap-2 mb-2 p-2" id="cyl-row-${rowCounter}-${cylIndex}">
+                        <div class="flex-grow-1">
+                            <select class="form-select form-select-sm cyl-product-select" name="bf_product_${cylIndex}_${rowCounter}" onchange="updateCylinderPreview(this)">
+                                ${getProductOptions(productName)}
+                            </select>
+                        </div>
+                        <div style="width: 100px;">
+                            <input type="number" class="form-control form-control-sm cyl-quantity-input text-center" name="bf_quantity_${cylIndex}_${rowCounter}"
+                                   placeholder="Qty (+/-)" step="1" value="${bfCylinders[productName]}" 
+                                   onchange="updateCylinderPreview(this)">
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-danger btn-sm" onclick="removeCylinderRow(this)">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // If no cylinders, add one default cylinder row
+        if (cylinderRowsHTML === '') {
+            cylIndex = 1;
+            cylinderRowsHTML = `
+                <div class="cylinder-row d-flex align-items-center gap-2 mb-2 p-2" id="cyl-row-${rowCounter}-${cylIndex}">
+                    <div class="flex-grow-1">
+                        <select class="form-select form-select-sm cyl-product-select" name="bf_product_${cylIndex}_${rowCounter}" onchange="updateCylinderPreview(this)">
+                            ${getProductOptions()}
+                        </select>
+                    </div>
+                    <div style="width: 100px;">
+                        <input type="number" class="form-control form-control-sm cyl-quantity-input text-center" name="bf_quantity_${cylIndex}_${rowCounter}"
+                               placeholder="Qty (+/-)" step="1" value="0" 
+                               onchange="updateCylinderPreview(this)">
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="removeCylinderRow(this)">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        row.innerHTML = `
+            <!-- Row Header -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <span class="badge bg-primary">#${rowCounter}</span>
+                    <span class="fw-bold ms-2">Customer</span>
+                    <span class="badge bg-success ms-2 save-status-badge" id="save-badge-${rowCounter}" style="display:none;">Saved</span>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-success btn-sm" onclick="saveSingleBFCustomer(${rowCounter}, this)">
+                        <i class="fas fa-save me-1"></i>Save This Customer
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="removeCustomerRow(this)">
+                        <i class="fas fa-times me-1"></i>Remove
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Row 1: Name, Mobile, B.F Balance -->
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Name *</label>
+                    <input type="text" name="customer_name_${rowCounter}" class="form-control" 
+                           placeholder="Customer Full Name" value="${customerName}" 
+                           onchange="updateCustomerCount()">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Mobile</label>
+                    <input type="text" name="customer_mobile_${rowCounter}" class="form-control" 
+                           placeholder="03XX-XXXXXXX" value="${customerMobile}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">B.F Balance</label>
+                    <div class="input-group">
+                        <span class="input-group-text">PKR</span>
+                        <input type="number" name="bf_balance_${rowCounter}" class="form-control" 
+                               step="0.01" min="0" value="${bfBalance}">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">B.F Date *</label>
+                    <input type="date" name="bf_date_${rowCounter}" class="form-control" value="${bfDate}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Description</label>
+                    <input type="text" name="bf_description_${rowCounter}" class="form-control"
+                           placeholder="B.F description" value="${bfDescription}">
+                </div>
+            </div>
+            
+            <!-- Row 2: Security Deposit, Personal Cylinders -->
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Security Deposit</label>
+                    <div class="input-group">
+                        <span class="input-group-text">PKR</span>
+                        <input type="number" name="security_deposit_${rowCounter}" class="form-control" 
+                               step="0.01" min="0" value="${securityDeposit}">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Personal Cylinders</label>
+                    <input type="number" name="personal_cylinders_${rowCounter}" class="form-control" 
+                           min="0" value="${personalCylinders}">
+                </div>
+            </div>
+            
+            <!-- Row 3: B.F Cylinders Section -->
+            <div class="row g-3">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label fw-bold small mb-0">B.F Cylinders (Opening Cylinders)</label>
+                        <button type="button" class="btn btn-success btn-sm" onclick="addCylinderRow(this)">
+                            <i class="fas fa-plus me-1"></i>Add Cylinder
+                        </button>
+                    </div>
+                    <div class="cylinders-container bg-light p-2 rounded" style="min-height: 50px;">
+                        ${cylinderRowsHTML}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(row);
+        
+        if (scrollToRow) {
+            setTimeout(function() {
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+        }
+        
+        updateCustomerCount();
+    }
+    
+    // ============================================================
+    // Remove Customer Row
+    // ============================================================
+    function removeCustomerRow(button) {
+        var container = document.getElementById('customersContainer');
+        if (container.children.length > 1) {
+            button.closest('.customer-row').remove();
+            updateCustomerCount();
+            showToast('Customer row removed', 'warning');
+        } else {
+            showToast('You must keep at least one customer row.', 'warning');
+        }
+    }
+    
+    // ============================================================
+    // Add Cylinder Row to a Customer
+    // ============================================================
+    function addCylinderRow(button) {
+        var customerRow = button.closest('.customer-row');
+        var cylindersContainer = customerRow.querySelector('.cylinders-container');
+        var rowId = customerRow.id.replace('customer-row-', '');
+        
+        var cylCount = cylindersContainer.querySelectorAll('.cylinder-row').length + 1;
+        
+        var cylinderRow = document.createElement('div');
+        cylinderRow.className = 'cylinder-row d-flex align-items-center gap-2 mb-2 p-2';
+        cylinderRow.id = `cyl-row-${rowId}-${cylCount}`;
+        cylinderRow.style.backgroundColor = '#ffffff';
+        cylinderRow.style.borderRadius = '4px';
+        cylinderRow.style.border = '1px solid #e9ecef';
+        cylinderRow.innerHTML = `
+            <div class="flex-grow-1">
+                <select class="form-select form-select-sm cyl-product-select" name="bf_product_${cylCount}_${rowId}" onchange="updateCylinderPreview(this)">
+                    ${getProductOptions()}
+                </select>
+            </div>
+            <div style="width: 100px;">
+                <input type="number" class="form-control form-control-sm cyl-quantity-input text-center" name="bf_quantity_${cylCount}_${rowId}"
+                       placeholder="Qty (+/-)" step="1" value="0" 
+                       onchange="updateCylinderPreview(this)">
+            </div>
+            <div>
+                <button type="button" class="btn btn-danger btn-sm" onclick="removeCylinderRow(this)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        
+        cylindersContainer.appendChild(cylinderRow);
+        showToast('Cylinder row added', 'success');
+    }
+    
+    // ============================================================
+    // Remove Cylinder Row
+    // ============================================================
+    function removeCylinderRow(button) {
+        var cylinderRow = button.closest('.cylinder-row');
+        var cylindersContainer = cylinderRow.closest('.cylinders-container');
+        
+        if (cylindersContainer.children.length > 1) {
+            cylinderRow.remove();
+            showToast('Cylinder row removed', 'warning');
+        } else {
+            showToast('You must keep at least one cylinder row.', 'warning');
+        }
+    }
+    
+    // ============================================================
+    // Update Cylinder Preview
+    // ============================================================
+    function updateCylinderPreview(element) {
+        updateCustomerCount();
+    }
+    
+    // ============================================================
+    // Update Customer Count
+    // ============================================================
+    function updateCustomerCount() {
+        var count = document.querySelectorAll('.customer-row').length;
+        var validCount = 0;
+        
+        document.querySelectorAll('.customer-row').forEach(function(row) {
+            var name = row.querySelector('input[name^="customer_name_"]').value.trim();
+            if (name) validCount++;
+        });
+        
+        document.getElementById('customerCount').textContent = `${validCount} / ${count} Customers`;
+        document.getElementById('rowCountInfo').textContent = `${count} rows`;
+    }
+    
+    // ============================================================
+    // Validate Form
+    // ============================================================
+    function validateForm() {
+        var rows = document.querySelectorAll('.customer-row');
+        var validRows = 0;
+        var invalidRows = [];
+        
+        rows.forEach(function(row, index) {
+            var name = row.querySelector('input[name^="customer_name_"]').value.trim();
+            if (name) {
+                validRows++;
+            } else {
+                invalidRows.push(index + 1);
+            }
+        });
+        
+        if (validRows === 0) {
+            showToast('Please fill at least one customer name.', 'warning');
+            return false;
+        }
+        
+        var confirmMsg = 
+            `⚠️ Confirm Bulk B.F Setup\n\n` +
+            `Total Customers: ${rows.length}\n` +
+            `Valid Customers: ${validRows}\n` +
+            `Invalid (Empty Name): ${invalidRows.length}\n\n` +
+            `${invalidRows.length > 0 ? '⚠️ Rows ' + invalidRows.join(', ') + ' have empty names and will be skipped.\n\n' : ''}` +
+            `Click OK to save, or Cancel.`;
+            return confirm(confirmMsg);
+    }
+    
+    // ============================================================
+    // Add 100 Default Rows Button Handler
+    // ============================================================
+    function add100DefaultRows() {
+        var container = document.getElementById('customersContainer');
+        var rows = container.querySelectorAll('.customer-row');
+        if (rows.length === 1) {
+            var nameInput = rows[0].querySelector('input[name^="customer_name_"]');
+            if (nameInput && !nameInput.value.trim()) {
+                container.innerHTML = '';
+            }
+        }
+        
+        showToast('Adding 100 default customer rows...', 'info');
+        for (var i = 0; i < 100; i++) {
+            addCustomerRow(false);
+        }
+        updateCustomerCount();
+        showToast('✅ 100 default rows added successfully!', 'success');
+    }
+    
+    // ============================================================
+    // Save Single Customer via API
+    // ============================================================
+    function saveSingleBFCustomer(rowId, button) {
+        var row = document.getElementById('customer-row-' + rowId);
+        if (!row) return;
+        
+        var nameInput = row.querySelector(`input[name="customer_name_${rowId}"]`);
+        var name = nameInput ? nameInput.value.trim() : '';
+        if (!name) {
+            showToast('Please enter Customer Name', 'warning');
+            if (nameInput) nameInput.focus();
+            return;
+        }
+        
+        var mobileInput = row.querySelector(`input[name="customer_mobile_${rowId}"]`);
+        var mobile = mobileInput ? mobileInput.value.trim() : '';
+        
+        var bfBalanceInput = row.querySelector(`input[name="bf_balance_${rowId}"]`);
+        var bfBalance = bfBalanceInput ? parseFloat(bfBalanceInput.value) || 0 : 0;
+
+        var bfDescriptionInput = row.querySelector(`input[name="bf_description_${rowId}"]`);
+        var bfDescription = bfDescriptionInput ? bfDescriptionInput.value.trim() : '';
+
+        var bfDateInput = row.querySelector(`input[name="bf_date_${rowId}"]`);
+        var bfDate = bfDateInput ? bfDateInput.value : '';
+        if (!bfDate) {
+            showToast('Please select B.F Date', 'warning');
+            if (bfDateInput) bfDateInput.focus();
+            return;
+        }
+        
+        var secInput = row.querySelector(`input[name="security_deposit_${rowId}"]`);
+        var securityDeposit = secInput ? parseFloat(secInput.value) || 0 : 0;
+        
+        var persInput = row.querySelector(`input[name="personal_cylinders_${rowId}"]`);
+        var personalCylinders = persInput ? parseInt(persInput.value) || 0 : 0;
+        
+        // Collect cylinder entries for this customer row
+        var bfCylinders = {};
+        var cylRows = row.querySelectorAll('.cylinder-row');
+        cylRows.forEach(function(cylRow) {
+            var prodSelect = cylRow.querySelector('.cyl-product-select');
+            var qtyInput = cylRow.querySelector('.cyl-quantity-input');
+            if (prodSelect && qtyInput) {
+                var prodName = prodSelect.value;
+                var qty = parseInt(qtyInput.value) || 0;
+                if (prodName && qty !== 0) {
+                    bfCylinders[prodName] = qty;
+                }
+            }
+        });
+        
+        var originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+        button.disabled = true;
+        
+        fetch('{% url "customers:save_bf_customer_api" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                name: name,
+                mobile: mobile,
+                bf_balance: bfBalance,
+                bf_date: bfDate,
+                bf_description: bfDescription,
+                security_deposit: securityDeposit,
+                personal_cylinders: personalCylinders,
+                bf_cylinders: bfCylinders
+            })
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                showToast(result.message || '✅ Customer saved successfully!', 'success');
+                var badge = document.getElementById('save-badge-' + rowId);
+                if (badge) badge.style.display = 'inline-block';
+                row.style.borderColor = '#198754';
+                row.style.backgroundColor = '#f8fff9';
+            } else {
+                showToast('❌ ' + (result.error || 'Failed to save customer'), 'error');
+            }
+        })
+        .catch(err => {
+            console.error("Error saving customer:", err);
+            showToast('❌ Error saving customer', 'error');
+        })
+        .finally(() => {
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
+    }
+
+    // ============================================================
+    // DOM Ready - Initialize
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("🟢 DOM loaded - Initializing Bulk B.F Setup...");
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        
+        // Start with 1 initial clean row instead of forcing 100 default rows on load
+        var INITIAL_ROWS = 1;
+        for (var i = 0; i < INITIAL_ROWS; i++) {
+            addCustomerRow(false);
+        }
+        
+        updateCustomerCount();
+        
+        setTimeout(function() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 200);
+    });
+</script>
+
+<style>
+    /* Toast Container */
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        max-width: 400px;
+    }
+    
+    .toast-custom {
+        background: #fff;
+        border-radius: 8px;
+        padding: 12px 18px;
+        margin-bottom: 10px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border-left: 4px solid #28a745;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        animation: slideIn 0.3s ease;
+    }
+    
+    .toast-custom.error {
+        border-left-color: #dc3545;
+    }
+    
+    .toast-custom.warning {
+        border-left-color: #ffc107;
+    }
+    
+    .toast-close {
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+        color: #999;
+        padding: 0 0 0 10px;
+    }
+    
+    .toast-close:hover {
+        color: #333;
+    }
+    
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0%); opacity: 1; }
+    }
+    
+    /* Customers Scroll Wrapper */
+    .customers-scroll-wrapper {
+        max-height: 65vh;
+        overflow-y: auto;
+        background-color: #f8f9fa;
+    }
+    
+    .customers-scroll-wrapper::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    .customers-scroll-wrapper::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    .customers-scroll-wrapper::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+    }
+    
+    .customers-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+    
+    /* Customer Row */
+    .customer-row {
+        background-color: #ffffff !important;
+        border: 1px solid #dee2e6 !important;
+        border-radius: 8px !important;
+        transition: all 0.2s ease;
+    }
+    
+    .customer-row:hover {
+        border-color: #0d6efd !important;
+        box-shadow: 0 2px 8px rgba(13, 110, 253, 0.1);
+    }
+    
+    .customer-row .badge.bg-primary {
+        font-size: 0.8rem;
+        padding: 0.3rem 0.6rem;
+    }
+    
+    .customer-row .form-control,
+    .customer-row .form-select {
+        font-size: 0.85rem;
+    }
+    
+    .customer-row .input-group-text {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.6rem;
+    }
+    
+    .customer-row .btn-sm {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.6rem;
+    }
+    
+    /* Cylinder Row */
+    .cylinder-row {
+        background-color: #ffffff !important;
+        border-radius: 4px !important;
+        border: 1px solid #e9ecef !important;
+        transition: all 0.2s ease;
+    }
+    
+    .cylinder-row:hover {
+        border-color: #6c757d !important;
+        background-color: #f8f9fa !important;
+    }
+    
+    .cylinder-row .form-select-sm,
+    .cylinder-row .form-control-sm {
+        font-size: 0.8rem;
+        padding: 0.2rem 0.4rem;
+    }
+    
+    /* Cylinders Container */
+    .cylinders-container {
+        background-color: #f8f9fa !important;
+        border-radius: 6px !important;
+        min-height: 50px;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .customer-row {
+            padding: 0.75rem !important;
+        }
+        .customer-row .row > div {
+            margin-bottom: 0.5rem;
+        }
+        .cylinder-row {
+            flex-wrap: wrap;
+        }
+        .cylinder-row > div {
+            width: 100% !important;
+            margin-bottom: 0.3rem;
+        }
+    }
+    
+    .card-header.bg-secondary {
+        background-color: #6c757d !important;
+    }
+    
+    .alert-info {
+        background-color: #e7f3ff;
+        border-color: #b8d4de;
+        color: #0c5460;
+    }
+    
+    .btn-success:hover {
+        transform: scale(1.02);
+        transition: transform 0.2s;
+    }
+    
+    .form-label {
+        font-weight: 600;
+        font-size: 0.8rem;
+        margin-bottom: 0.2rem;
+        color: #495057;
+    }
+    
+    .customer-row .badge.bg-primary {
+        background-color: #0d6efd !important;
+        font-size: 0.85rem;
+        padding: 0.35rem 0.7rem;
+        border-radius: 20px;
+    }
+</style>
+{% endblock %}

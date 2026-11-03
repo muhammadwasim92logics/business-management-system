@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}{{ page_title }} - GBMS{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-body">
+                <form method="post" id="delivery-form">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Customer *</label>
+                            <select name="customer" class="form-select" required>
+                                <option value="">Select Customer</option>
+                                {% for customer in form.customer.field.queryset %}
+                                <option value="{{ customer.pk }}">{{ customer.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Product *</label>
+                            <select name="product" class="form-select" id="id_product" required>
+                                <option value="">Select Product</option>
+                                {% for product in products %}
+                                <option value="{{ product.pk }}" data-stock="{{ product.stock_quantity }}">{{ product.name }} ({{ product.stock_quantity }} left)</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Quantity *</label>
+                            <input type="number" name="quantity" class="form-control" id="id_quantity" min="1" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Unit Price</label>
+                            <input type="number" name="unit_price" class="form-control" step="0.01" value="0">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Empty Returned</label>
+                            <input type="number" name="empty_returned" class="form-control" min="0" value="0">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Full Delivered</label>
+                            <input type="number" name="full_delivered" class="form-control" min="0" value="0">
+                        </div>
+                        <div class="col-12 mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" name="is_guarantee" class="form-check-input" id="is_guarantee">
+                                <label class="form-check-label" for="is_guarantee">This is a guarantee delivery</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Guarantee Amount</label>
+                            <input type="number" name="guarantee_amount" class="form-control" step="0.01" value="0">
+                        </div>
+                        <div class="col-12 mb-3">
+                            <label class="form-label">Remarks</label>
+                            <textarea name="remarks" class="form-control" rows="2"></textarea>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">Create Delivery</button>
+                        <a href="{% url 'deliveries:list' %}" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('delivery-form').addEventListener('submit', function(e) {
+    const productSelect = document.getElementById('id_product');
+    const quantityInput = document.getElementById('id_quantity');
+    const selectedOption = productSelect.options[productSelect.selectedIndex];
+    const availableStock = parseInt(selectedOption.dataset.stock) || 0;
+    const requestedQty = parseInt(quantityInput.value) || 0;
+    
+    if (requestedQty > availableStock) {
+        e.preventDefault();
+        alert(`⚠️ Insufficient Stock!\nAvailable: ${availableStock} units.\nRequested: ${requestedQty} units.`);
+        return false;
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,933 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load fbr_filters %}
+
+{% block title %}FBR Invoices - GBMS{% endblock %}
+{% block page_title %}🧾 FBR Invoices{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="fas fa-receipt me-2"></i>FBR Invoices
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end" id="fbrInvoicesForm">
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Select Customers</label>
+                <div class="customer-picker">
+                    <button type="button" class="form-select text-start customer-picker-toggle" aria-expanded="false">
+                        <span id="customerSelectionSummary">
+                            {% if selected_customer_ids %}
+                                {% if selected_customer_ids|length == 1 %}
+                                    {% for customer in customers %}
+                                        {% if customer.pk|stringformat:'s' in selected_customer_ids %}
+                                            {{ customer.name }} ({{ customer.customer_code }})
+                                        {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    {{ selected_customer_ids|length }} customers selected
+                                {% endif %}
+                            {% else %}
+                                -- Select Customers --
+                            {% endif %}
+                        </span>
+                    </button>
+                    <div class="customer-picker-menu">
+                        <div class="customer-picker-search-wrap">
+                            <input type="text" id="customerSearchInput" class="form-control customer-search-input" placeholder="Search customer..." aria-label="Search customer">
+                        </div>
+                        <div class="customer-picker-list">
+                            {% for customer in customers %}
+                            <label class="customer-option">
+                                <input type="checkbox" class="customer-checkbox-option" name="customer_id" value="{{ customer.pk }}" {% if customer.pk|stringformat:'s' in selected_customer_ids %}checked{% endif %}>
+                                <span>{{ customer.name }} ({{ customer.customer_code }}) - {{ customer.mobile }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div id="persistentCustomerSelection" class="selected-customer-panel mt-2" aria-live="polite">
+                    <div class="small fw-bold text-success mb-1">
+                        <i class="fas fa-thumbtack me-1"></i>Selected Customers
+                    </div>
+                    <div id="persistentCustomerList" class="d-flex flex-wrap gap-1"></div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Date From</label>
+                <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Date To</label>
+                <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">GST Rate (%)</label>
+                <input type="number" name="gst_rate" class="form-control" value="{{ gst_rate }}"
+                       step="0.01" min="0" max="100" placeholder="18.00">
+            </div>
+            <!-- Add this after the GST Rate input field -->
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Divisor Value</label>
+                <input type="number" name="divisor_value" class="form-control" 
+                    value="{{ divisor_value|default:'115' }}"
+                    step="0.01" min="0.01" placeholder="115.00">
+                <small class="text-muted">Divides EX Value for OXYGEN LIQUID quantity</small>
+            </div>
+            <div class="col-md-12 mt-3">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-search me-1"></i>View Invoices
+                </button>
+                <a href="{% url 'fbr:invoices' %}?clear_customer_selection=1" class="btn btn-outline-secondary" id="resetFbrInvoices">Clear filters</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if selected_customer_ids %}
+<div class="alert alert-success mb-4">
+    <div class="fw-bold mb-2"><i class="fas fa-users me-2"></i>Selected customers included in this FBR report</div>
+    <div class="d-flex flex-wrap gap-2">
+        {% for customer in selected_customers %}
+            <span class="badge bg-success">{{ customer.name }} ({{ customer.customer_code }})</span>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body">
+        {% if invoice_rows %}
+        <form method="post" action="{% url 'fbr:manage_invoice_numbers' %}" class="row g-2 align-items-end mb-3" id="manageFbrInvoiceNumbersForm">
+            {% csrf_token %}
+            {% for customer_id in selected_customer_ids %}
+                <input type="hidden" name="customer_id" value="{{ customer_id }}">
+            {% endfor %}
+            {% for row in invoice_rows %}
+                <input type="hidden" name="delivery_group" value="{{ row.delivery_ids|join:',' }}">
+            {% endfor %}
+            <input type="hidden" name="date_from" value="{{ date_from }}">
+            <input type="hidden" name="date_to" value="{{ date_to }}">
+            <input type="hidden" name="gst_rate" value="{{ gst_rate }}">
+            <input type="hidden" name="divisor_value" value="{{ divisor_value }}">
+            <div class="col-md-5">
+                <label for="startInvoiceNumber" class="form-label fw-bold">Starting Invoice Number</label>
+                <input type="number" min="1" step="1" inputmode="numeric" class="form-control"
+                       id="startInvoiceNumber" name="start_number" placeholder="e.g. 1001">
+                <small class="text-muted">Assigns consecutive numbers to the rows shown, in table order.</small>
+            </div>
+            <div class="col-auto">
+                <button type="submit" name="action" value="assign" class="btn btn-primary">
+                    <i class="fas fa-list-ol me-1"></i>Assign Sequential Numbers
+                </button>
+            </div>
+            <div class="col-auto">
+                <button type="submit" name="action" value="reset" class="btn btn-outline-danger"
+                        onclick="return confirm('Clear invoice numbers for all rows currently shown in this report?');">
+                    <i class="fas fa-rotate-left me-1"></i>Reset Shown Invoice Numbers
+                </button>
+            </div>
+        </form>
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle" id="fbrInvoicesTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th>SR NO</th>
+                        <th>ENTRY DATE<br><small>Transaction/Delivery Date</small></th>
+                        <th>ADDED ON<br><small>Created Date & Time</small></th>
+                        <th>INVOICE NO</th>
+                        <th>NTN</th>
+                        <th>STN</th>
+                        <th>CUSTOMER NAME</th>
+                        <th>ITEM DESCRIPTION</th>
+                        <th>QUANTITY</th>
+                        <th>UNIT</th>
+                        <th>RATE</th>
+                        <th>SUBTOTAL<br><small>(WITHOUT TAX)</small></th>
+                        <th>GST({{ gst_rate }}%)</th>
+                        <th>TOTAL<br><small>(SUBTOTAL + GST)</small></th>
+                        <th>ACTIONS</th>
+                    </tr>
+
+                </thead>
+                <tbody>
+                    {% for row in invoice_rows %}
+                    <tr>
+                        <td>{{ row.sr_no }}</td>
+                        <td>{{ row.date|date:"d/m/Y" }}</td>
+                        <td>{{ row.created_at|date:"d/m/Y H:i" }}</td>
+                        <td>{{ row.invoice_no|default:"—" }}</td>
+                        <td>{{ row.ntn }}</td>
+                        <td>{{ row.stn }}</td>
+                        <td>{{ row.customer_name }}</td>
+                        <td><strong>{{ row.item_description }}</strong></td>
+                        <td class="text-center">
+                            <span class="fbr-amount" tabindex="0" role="button"
+                                  title="Full value: {{ row.quantity|precise_decimal }}"
+                                  data-full-value="{{ row.quantity|precise_decimal }}"
+                                  data-bs-toggle="popover"
+                                  data-bs-trigger="hover focus click"
+                                  data-bs-placement="top"
+                                  data-bs-content="Full value: {{ row.quantity|precise_decimal }}">
+                                {{ row.quantity|compact_decimal }}
+                            </span>
+                        </td>
+                        <td class="text-center">{{ row.unit }}</td>
+                        <td class="text-end">
+                            <span class="fbr-amount" tabindex="0" role="button"
+                                  title="Full value: PKR {{ row.rate|precise_decimal }}"
+                                  data-full-value="PKR {{ row.rate|precise_decimal }}"
+                                  data-bs-toggle="popover"
+                                  data-bs-trigger="hover focus click"
+                                  data-bs-placement="top"
+                                  data-bs-content="Full value: PKR {{ row.rate|precise_decimal }}">
+                                PKR {{ row.rate|compact_decimal }}
+                            </span>
+                        </td>
+                        <td class="text-end">
+                            <span class="fbr-amount" tabindex="0" role="button"
+                                  title="Full value: PKR {{ row.ex_value|precise_decimal }}"
+                                  data-full-value="PKR {{ row.ex_value|precise_decimal }}"
+                                  data-bs-toggle="popover"
+                                  data-bs-trigger="hover focus click"
+                                  data-bs-placement="top"
+                                  data-bs-content="Full value: PKR {{ row.ex_value|precise_decimal }}">
+                                PKR {{ row.ex_value|compact_decimal }}
+                            </span>
+                        </td>
+                        <td class="text-end">
+                            <span class="fbr-amount" tabindex="0" role="button"
+                                  title="Full value: PKR {{ row.gst_amount|precise_decimal }}"
+                                  data-full-value="PKR {{ row.gst_amount|precise_decimal }}"
+                                  data-bs-toggle="popover"
+                                  data-bs-trigger="hover focus click"
+                                  data-bs-placement="top"
+                                  data-bs-content="Full value: PKR {{ row.gst_amount|precise_decimal }}">
+                                PKR {{ row.gst_amount|compact_decimal }}
+                            </span>
+                        </td>
+                        <td class="text-end">
+                            <strong>
+                                <span class="fbr-amount" tabindex="0" role="button"
+                                      title="Full value: PKR {{ row.total_value|precise_decimal }}"
+                                      data-full-value="PKR {{ row.total_value|precise_decimal }}"
+                                      data-bs-toggle="popover"
+                                      data-bs-trigger="hover focus click"
+                                      data-bs-placement="top"
+                                      data-bs-content="Full value: PKR {{ row.total_value|precise_decimal }}">
+                                    PKR {{ row.total_value|compact_decimal }}
+                                </span>
+                            </strong>
+                        </td>
+                        <td class="text-center">
+                            {% for customer in selected_customers %}
+                                {% if customer.pk == row.customer_id %}
+                                    <button type="button" class="btn btn-sm btn-info" 
+                                            onclick="openCustomerSettingsModal('{{ row.customer_id }}', '{{ row.customer_name|escapejs }}')">
+                                        <i class="fas fa-cog me-1"></i>Actions
+                                    </button>
+                                {% endif %}
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-success">
+                    <tr>
+                        <td colspan="12" class="text-end"><strong>TOTAL GST</strong></td>
+                        <td class="text-end"><strong>PKR {{ total_gst|truncate_decimal }}</strong></td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            {% if selected_customer_ids %}
+                No invoices found for the selected customers and date range.
+            {% else %}
+                Select customers above to view their invoices.
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Customer Settings Modal -->
+<div class="modal fade" id="customerSettingsModal" tabindex="-1" aria-labelledby="customerSettingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="customerSettingsModalLabel">
+                    <i class="fas fa-edit me-2"></i><span id="modalCustomerName">Edit FBR Settings</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="customerSettingsForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="modalCustomerId" value="">
+                    
+                    <p class="text-muted">Invoice numbers are assigned automatically in sequence and cannot be changed here.</p>
+                    
+                    <div class="mb-3">
+                        <label for="modalSTN" class="form-label fw-bold">STN (Sales Tax Number)</label>
+                        <input type="text" class="form-control" id="modalSTN" placeholder="e.g., STN-1234567890">
+                        <small class="text-muted d-block mt-1">Persistent Sales Tax Number for this customer</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="modalNTN" class="form-label fw-bold">NTN (National Tax Number)</label>
+                        <input type="text" class="form-control" id="modalNTN" placeholder="e.g., NTN-0987654321">
+                        <small class="text-muted d-block mt-1">Persistent National Tax Number for this customer</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveCustomerSettings()">
+                    <i class="fas fa-save me-1"></i>Save Settings
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card, .card-body {
+        overflow: visible !important;
+    }
+
+    .customer-picker {
+        position: relative;
+        width: 100%;
+    }
+
+    .selected-customer-panel {
+        border: 1px solid #b7dfc5;
+        border-radius: 0.375rem;
+        background: #f1fbf4;
+        padding: 0.5rem 0.65rem;
+    }
+
+    .selected-customer-panel:empty {
+        display: none;
+    }
+
+    .selected-customer-chip {
+        background: #198754;
+        color: #fff;
+        border-radius: 0.25rem;
+        padding: 0.2rem 0.45rem;
+        font-size: 0.78rem;
+    }
+
+    .customer-picker-toggle {
+        width: 100%;
+        min-height: 38px;
+        cursor: pointer;
+        background: #fff;
+        border: 1px solid #ced4da;
+        border-radius: 0.375rem;
+        padding: 0.5rem 0.75rem;
+        text-align: left;
+        color: #212529;
+    }
+
+    .customer-picker-toggle:focus {
+        border-color: #86b7fe;
+        box-shadow: 0 0 0 0.25rem rgba(13,110,253,0.25);
+        outline: 0;
+    }
+
+    .customer-picker-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        background: #fff;
+        border: 1px solid #c5d1e0;
+        border-radius: 0.5rem;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+        max-height: 560px;
+        min-height: 420px;
+        display: none;
+        z-index: 1050;
+        overflow: hidden;
+    }
+
+    .customer-picker.open .customer-picker-menu {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .customer-picker-search-wrap {
+        padding: 0.6rem 0.7rem 0.5rem;
+        border-bottom: 1px solid #eef0f2;
+        background: #f8fafc;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+    }
+
+    .customer-search-input {
+        height: 38px;
+        border-radius: 0.4rem;
+        border: 1px solid #c5d1e0;
+        font-size: 0.9rem;
+    }
+
+    .customer-picker-list {
+        overflow-y: auto;
+        max-height: 480px;
+        min-height: 360px;
+    }
+
+    .customer-option {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid #f0f1f2;
+        cursor: pointer;
+        font-size: 0.88rem;
+        min-height: 38px;
+        transition: background-color 0.15s ease;
+    }
+
+    .customer-option:hover {
+        background-color: #eef5ff;
+    }
+
+    .customer-option:last-child {
+        border-bottom: 0;
+    }
+
+    .customer-option input {
+        margin: 0;
+        transform: scale(1.1);
+    }
+
+    #fbrInvoicesTable thead th {
+        font-size: 0.85rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    
+    #fbrInvoicesTable tbody td {
+        font-size: 0.9rem;
+    }
+
+    .fbr-amount {
+        cursor: pointer;
+        color: #0d6efd;
+        text-decoration: underline dotted;
+        text-underline-offset: 0.15rem;
+        display: inline-block;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: visible;
+        text-overflow: clip;
+        max-width: none;
+        position: relative;
+        z-index: 1;
+    }
+
+    .fbr-amount:hover,
+    .fbr-amount:focus-visible {
+        color: #0a58ca;
+        text-decoration: underline;
+        outline: none;
+    }
+
+    .invoice-no-input {
+        min-width: 90px;
+        font-weight: 600;
+        text-align: center;
+    }
+
+
+<style>
+    /* ... existing styles ... */
+    
+    .customer-picker {
+        position: relative;
+        width: 100%;
+        z-index: 1000;
+    }
+
+    .customer-picker-toggle {
+        width: 100%;
+        min-height: 38px;
+        cursor: pointer;
+        background: #fff;
+        border: 1px solid #ced4da;
+        border-radius: 0.375rem;
+        padding: 0.5rem 0.75rem;
+        text-align: left;
+        color: #212529;
+        position: relative;
+    }
+
+    .customer-picker-toggle::after {
+        content: "▼";
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.7rem;
+        color: #6c757d;
+    }
+
+    .customer-picker-toggle:focus {
+        border-color: #86b7fe;
+        box-shadow: 0 0 0 0.25rem rgba(13,110,253,0.25);
+        outline: 0;
+    }
+
+    .customer-picker-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        background: #fff;
+        border: 1px solid #c5d1e0;
+        border-radius: 0.5rem;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+        max-height: 400px;
+        min-height: 200px;
+        display: none;
+        z-index: 1050;
+        overflow: hidden;
+        width: 100%;
+    }
+
+    .customer-picker.open .customer-picker-menu {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .customer-picker-search-wrap {
+        padding: 0.6rem 0.7rem 0.5rem;
+        border-bottom: 1px solid #eef0f2;
+        background: #f8fafc;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+    }
+
+    .customer-search-input {
+        height: 38px;
+        border-radius: 0.4rem;
+        border: 1px solid #c5d1e0;
+        font-size: 0.9rem;
+        width: 100%;
+        padding: 0.375rem 0.75rem;
+    }
+
+    .customer-picker-list {
+        overflow-y: auto;
+        max-height: 340px;
+        min-height: 140px;
+        padding: 0;
+    }
+
+    .customer-option {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid #f0f1f2;
+        cursor: pointer;
+        font-size: 0.88rem;
+        min-height: 38px;
+        transition: background-color 0.15s ease;
+        margin: 0;
+    }
+
+    .customer-option:hover {
+        background-color: #eef5ff;
+    }
+
+    .customer-option:last-child {
+        border-bottom: 0;
+    }
+
+    .customer-option input[type="checkbox"] {
+        margin: 0;
+        flex-shrink: 0;
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+    }
+
+    .customer-option span {
+        flex: 1;
+    }
+
+    /* ============================================================
+   INVOICE TABLE STYLES
+   ============================================================ */
+    #fbrInvoicesTable thead th {
+        font-size: 0.8rem;
+        font-weight: 600;
+        white-space: nowrap;
+        padding: 0.6rem 0.5rem;
+    }
+    
+    #fbrInvoicesTable tbody td {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.5rem;
+        vertical-align: middle;
+    }
+
+    .invoice-no-input {
+        min-width: 90px;
+        max-width: 130px;
+        font-weight: 600;
+        text-align: center;
+        transition: all 0.3s ease;
+        font-size: 0.85rem;
+        padding: 0.2rem 0.3rem;
+    }
+    
+    .invoice-no-input:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    }
+    
+    .invoice-no-input.updated {
+        background-color: #d4edda;
+        border-color: #28a745;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .customer-picker-menu {
+            max-height: 300px;
+            min-height: 150px;
+        }
+        .customer-picker-list {
+            max-height: 250px;
+        }
+    }
+
+</style>
+
+<script>
+    let modalCustomerId = null;
+    let customerFBRSettings = {{ customer_fbr_settings_json|safe }};
+    const modalElement = document.getElementById('customerSettingsModal');
+    const modalInstance = (window.bootstrap && window.bootstrap.Modal && modalElement)
+        ? window.bootstrap.Modal.getOrCreateInstance(modalElement)
+        : null;
+
+    // ============================================================
+    // CUSTOMER PICKER - FIXED
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        const customerPicker = document.querySelector('.customer-picker');
+        const pickerToggle = document.querySelector('.customer-picker-toggle');
+        const customerSearchInput = document.getElementById('customerSearchInput');
+        const customerList = document.querySelector('.customer-picker-list');
+        const storageKey = 'fbrInvoiceSelectedCustomers';
+        const hasCustomerQuery = new URLSearchParams(window.location.search).has('customer_id');
+        let customerCheckboxes = Array.from(document.querySelectorAll('.customer-checkbox-option'));
+
+        // URL selections are authoritative after a submit; otherwise restore the last selection.
+        if (!hasCustomerQuery) {
+            let savedCustomerIds = [];
+            try {
+                savedCustomerIds = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            } catch (error) {
+                savedCustomerIds = [];
+            }
+            customerCheckboxes.forEach((checkbox) => {
+                checkbox.checked = savedCustomerIds.includes(checkbox.value);
+            });
+        }
+
+        function sortSelectedCustomersFirst() {
+            if (!customerList) {
+                return;
+            }
+            Array.from(customerList.querySelectorAll('.customer-option'))
+                .sort((left, right) => {
+                    const leftSelected = left.querySelector('input').checked;
+                    const rightSelected = right.querySelector('input').checked;
+                    return Number(rightSelected) - Number(leftSelected);
+                })
+                .forEach((option) => customerList.appendChild(option));
+        }
+
+        function saveSelectedCustomers() {
+            const selectedIds = customerCheckboxes
+                .filter((checkbox) => checkbox.checked)
+                .map((checkbox) => checkbox.value);
+            localStorage.setItem(storageKey, JSON.stringify(selectedIds));
+
+            const body = selectedIds
+                .map((customerId) => `customer_id=${encodeURIComponent(customerId)}`)
+                .join('&');
+            fetch('/fbr/api/save-selected-customers/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: body
+            }).catch((error) => console.error('Unable to save customer selection:', error));
+        }
+
+        // Toggle dropdown on button click
+        if (pickerToggle && customerPicker) {
+            pickerToggle.addEventListener('click', function(e) {
+                e.stopPropagation();
+                customerPicker.classList.toggle('open');
+                const isOpen = customerPicker.classList.contains('open');
+                pickerToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+
+                if (isOpen && customerSearchInput) {
+                    setTimeout(() => customerSearchInput.focus(), 100);
+                }
+            });
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            if (customerPicker && !customerPicker.contains(event.target)) {
+                customerPicker.classList.remove('open');
+                if (pickerToggle) {
+                    pickerToggle.setAttribute('aria-expanded', 'false');
+                }
+            }
+        });
+
+        // Update summary when checkboxes change
+        customerCheckboxes.forEach((checkbox) => {
+            checkbox.addEventListener('change', function() {
+                saveSelectedCustomers();
+                sortSelectedCustomersFirst();
+                updateCustomerSummary();
+            });
+        });
+
+        // Filter customers on search
+        if (customerSearchInput) {
+            customerSearchInput.addEventListener('input', function() {
+                const searchTerm = this.value.trim().toLowerCase();
+                const customerOptions = document.querySelectorAll('.customer-option');
+
+                customerOptions.forEach((option) => {
+                    const optionText = option.textContent.toLowerCase();
+                    const matches = !searchTerm || optionText.includes(searchTerm);
+                    option.style.display = matches ? 'flex' : 'none';
+                });
+            });
+
+            // Prevent search input from closing dropdown
+            customerSearchInput.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+        }
+
+        // Initial summary update
+        sortSelectedCustomersFirst();
+        updateCustomerSummary();
+
+        const invoicesForm = document.getElementById('fbrInvoicesForm');
+        if (invoicesForm) {
+            invoicesForm.addEventListener('submit', function() {
+                if (!customerCheckboxes.some((checkbox) => checkbox.checked)) {
+                    const clearInput = document.createElement('input');
+                    clearInput.type = 'hidden';
+                    clearInput.name = 'clear_customer_selection';
+                    clearInput.value = '1';
+                    invoicesForm.appendChild(clearInput);
+                    localStorage.removeItem(storageKey);
+                } else {
+                    saveSelectedCustomers();
+                }
+            });
+        }
+
+        const resetLink = document.getElementById('resetFbrInvoices');
+        if (resetLink) {
+            resetLink.addEventListener('click', function() {
+                localStorage.removeItem(storageKey);
+            });
+        }
+    });
+
+    function updateCustomerSummary() {
+        const checkboxes = document.querySelectorAll('.customer-checkbox-option');
+        const selected = Array.from(checkboxes).filter((checkbox) => checkbox.checked);
+        const label = document.getElementById('customerSelectionSummary');
+        const persistentPanel = document.getElementById('persistentCustomerSelection');
+        const persistentList = document.getElementById('persistentCustomerList');
+
+        if (!selected.length) {
+            label.textContent = '-- Select Customers --';
+            persistentPanel.style.display = 'none';
+            persistentList.innerHTML = '';
+            return;
+        }
+
+        if (selected.length === 1) {
+            const text = selected[0].nextElementSibling.textContent.trim();
+            label.textContent = text;
+        } else {
+            label.textContent = selected.length + ' customers selected';
+        }
+
+        persistentPanel.style.display = 'block';
+        persistentList.innerHTML = selected.map((checkbox) => {
+            const customerName = checkbox.nextElementSibling.textContent.trim();
+            return `<span class="selected-customer-chip"><i class="fas fa-user me-1"></i>${customerName}</span>`;
+        }).join('');
+    }
+
+    function getCookie(name) {
+        const cookie = document.cookie.split(';').find((item) => item.trim().startsWith(`${name}=`));
+        return cookie ? decodeURIComponent(cookie.trim().substring(name.length + 1)) : '';
+    }
+
+    // ============================================================
+    // CUSTOMER SETTINGS MODAL
+    // ============================================================
+    function openCustomerSettingsModal(customerId, customerName) {
+        modalCustomerId = customerId;
+        
+        document.getElementById('modalCustomerName').textContent = 'Edit FBR Settings - ' + customerName;
+        document.getElementById('modalCustomerId').value = customerId;
+
+        if (customerFBRSettings && customerFBRSettings[customerId]) {
+            const settings = customerFBRSettings[customerId];
+            document.getElementById('modalSTN').value = settings.stn || '';
+            document.getElementById('modalNTN').value = settings.ntn || '';
+        } else {
+            document.getElementById('modalSTN').value = '';
+            document.getElementById('modalNTN').value = '';
+        }
+
+        if (modalInstance) {
+            modalInstance.show();
+            return;
+        }
+
+        if (modalElement) {
+            modalElement.classList.add('show');
+            modalElement.style.display = 'block';
+            modalElement.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('modal-open');
+        }
+    }
+
+    function closeCustomerSettingsModal() {
+        if (modalInstance) {
+            modalInstance.hide();
+            return;
+        }
+
+        if (modalElement) {
+            modalElement.classList.remove('show');
+            modalElement.style.display = 'none';
+            modalElement.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('modal-open');
+        }
+    }
+
+    function saveCustomerSettings() {
+        const customerId = document.getElementById('modalCustomerId').value;
+        const stn = document.getElementById('modalSTN').value;
+        const ntn = document.getElementById('modalNTN').value;
+
+        const csrfToken = getCsrfToken();
+
+        // First save the customer settings (STN, NTN)
+        fetch('{% url "fbr:save_customer_setting" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                customer_id: customerId,
+                stn: stn,
+                ntn: ntn
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                if (!customerFBRSettings[customerId]) {
+                    customerFBRSettings[customerId] = {};
+                }
+                customerFBRSettings[customerId].stn = stn;
+                customerFBRSettings[customerId].ntn = ntn;
+
+                updateCustomerSTNNTN(customerId, stn, ntn);
+                
+                alert('✓ Settings saved successfully!');
+                closeCustomerSettingsModal();
+            } else {
+                alert('✗ Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while saving settings');
+        });
+    }
+
+    function updateCustomerSTNNTN(customerId, stn, ntn) {
+        const rows = document.querySelectorAll('#fbrInvoicesTable tbody tr');
+        rows.forEach(row => {
+            const customerIdCell = row.querySelector(`[data-customer-id="${customerId}"]`);
+            if (customerIdCell) {
+                // Update NTN (4th column)
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 4) {
+                    cells[3].textContent = ntn || '-';
+                }
+                if (cells.length >= 5) {
+                    cells[4].textContent = stn || '-';
+                }
+            }
+        });
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let cookie of cookies) {
+                cookie = cookie.trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // ============================================================
+    // ACTION BUTTONS
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.action-btn').forEach((button) => {
+            button.addEventListener('click', function(event) {
+                event.preventDefault();
+                const customerId = this.dataset.customerId;
+                const customerName = this.dataset.customerName || 'Customer';
+                openCustomerSettingsModal(customerId, customerName);
+            });
+        });
+    });
+</script>
+
+{% endblock %}

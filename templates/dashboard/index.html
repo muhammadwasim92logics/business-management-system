@@ -1,0 +1,224 @@
+@'
+{% extends 'base.html' %}
+{% block title %}Dashboard - GBMS{% endblock %}
+{% block page_title %}Dashboard Overview{% endblock %}
+
+{% block content %}
+<!-- Stats Row -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="d-flex align-items-center">
+                <div class="icon bg-primary-50 me-3">
+                    <i class="fas fa-users text-primary"></i>
+                </div>
+                <div>
+                    <small class="text-muted">Total Customers</small>
+                    <h3 class="mb-0">{{ total_customers }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="d-flex align-items-center">
+                <div class="icon bg-success bg-opacity-10 me-3">
+                    <i class="fas fa-user-check text-success"></i>
+                </div>
+                <div>
+                    <small class="text-muted">Active Customers</small>
+                    <h3 class="mb-0">{{ active_customers }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="d-flex align-items-center">
+                <div class="icon bg-warning bg-opacity-10 me-3">
+                    <i class="fas fa-truck text-warning"></i>
+                </div>
+                <div>
+                    <small class="text-muted">Today's Deliveries</small>
+                    <h3 class="mb-0">{{ today_deliveries_count }}</h3>
+                    <small>PKR {{ today_deliveries_amount|floatformat:0 }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="d-flex align-items-center">
+                <div class="icon bg-danger bg-opacity-10 me-3">
+                    <i class="fas fa-clock text-danger"></i>
+                </div>
+                <div>
+                    <small class="text-muted">Pending Amount</small>
+                    <h3 class="mb-0">PKR {{ pending_amount|floatformat:0 }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row g-4 mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">14-Day Sales Trend</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="salesChart" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Quick Stats</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span>Weekly Sales</span>
+                    <strong>PKR {{ weekly_sales|floatformat:0 }}</strong>
+                </div>
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span>Monthly Sales</span>
+                    <strong>PKR {{ monthly_sales|floatformat:0 }}</strong>
+                </div>
+                <div class="d-flex justify-content-between py-2">
+                    <span>Total Orders</span>
+                    <strong>{{ total_orders }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cylinder Sales Summary -->
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Cylinder Sales</h5>
+                <small class="text-muted">Last 14 days</small>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">Cylinder</th>
+                            <th scope="col" class="text-end">Delivered</th>
+                            <th scope="col" class="text-end">Full Returned</th>
+                            <th scope="col" class="text-end">Net Sold</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in cylinder_sales %}
+                        <tr>
+                            <th scope="row">{{ item.product__name }}</th>
+                            <td class="text-end">{{ item.delivered|floatformat:-2 }}</td>
+                            <td class="text-end">{{ item.total_full_returned|floatformat:-2 }}</td>
+                            <td class="text-end fw-semibold">{{ item.net_sold|floatformat:-2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-4">No cylinder sales in the last 14 days.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row g-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Recent Deliveries</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for delivery in recent_deliveries|slice:":5" %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ delivery.delivery_no }}</strong>
+                            <small class="text-muted d-block">{{ delivery.customer.name }}</small>
+                        </div>
+                        <span class="badge bg-primary">PKR {{ delivery.delivery_amount|floatformat:0 }}</span>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted">No recent deliveries</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Low Stock Alerts</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    {% for product in low_stock_products %}
+                    <div class="list-group-item list-group-item-warning d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ product.name }}</strong>
+                            <small class="d-block">Min: {{ product.minimum_stock }}</small>
+                        </div>
+                        <span class="badge bg-danger">{{ product.stock_quantity }} left</span>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted">All products have sufficient stock</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const ctx = document.getElementById('salesChart').getContext('2d');
+    const salesData = {{ sales_chart_data|safe }};
+    
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: salesData.map(d => d.date),
+            datasets: [{
+                label: 'Sales',
+                data: salesData.map(d => d.total),
+                borderColor: '#059669',
+                backgroundColor: 'rgba(5, 150, 105, 0.75)',
+                borderWidth: 1,
+                borderRadius: 4,
+                maxBarThickness: 32
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) { return 'PKR ' + value.toLocaleString(); }
+                    }
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}
+'@ | Out-File -FilePath "templates/dashboard/index.html" -Encoding UTF8
+
+Write-Host "✅ Created: templates/dashboard/index.html" -ForegroundColor Green

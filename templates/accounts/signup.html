@@ -1,0 +1,90 @@
+﻿{% extends 'base_auth.html' %}
+{% load static %}
+
+{% block title %}Sign Up - GBMS{% endblock %}
+
+{% block auth_content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-brand">
+            <div class="brand-icon">
+                <i class="fas fa-fire"></i>
+            </div>
+            <h1 class="brand-title">GBMS</h1>
+            <p class="brand-subtitle">Gas Business Management System</p>
+        </div>
+
+        <div class="auth-form">
+            <h2 class="form-title">Create Account</h2>
+            <p class="form-subtitle">Join GBMS and manage your gas business</p>
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                        <i class="fas fa-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="form-group">
+                    <label for="id_username" class="form-label">
+                        <i class="fas fa-user me-1"></i>Username
+                    </label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-user"></i></span>
+                        <input type="text" name="username" id="id_username" class="form-control" 
+                               placeholder="Choose a username" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="id_password1" class="form-label">
+                        <i class="fas fa-lock me-1"></i>Password
+                    </label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                        <input type="password" name="password1" id="id_password1" class="form-control" 
+                               placeholder="Create a password" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="id_password2" class="form-label">
+                        <i class="fas fa-check-circle me-1"></i>Confirm Password
+                    </label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-check-circle"></i></span>
+                        <input type="password" name="password2" id="id_password2" class="form-control" 
+                               placeholder="Confirm your password" required>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-login">
+                    <span>Create Account</span>
+                    <i class="fas fa-arrow-right ms-2"></i>
+                </button>
+            </form>
+
+            <div class="auth-divider">
+                <span>or</span>
+            </div>
+
+            <div class="auth-footer">
+                <p class="text-center mb-0">
+                    Already have an account? 
+                    <a href="{% url 'accounts:login' %}" class="signup-link">Sign In</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="auth-footer-text">
+        <p>&copy; 2026 GBMS. All rights reserved.</p>
+    </div>
+</div>
+{% endblock %}

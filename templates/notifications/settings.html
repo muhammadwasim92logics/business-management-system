@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}Notification Settings - GBMS{% endblock %}
+{% block page_title %}Notification Settings{% endblock %}
+{% block extra_css %}
+<style>
+    .settings-hero {
+        background: linear-gradient(120deg, #064e3b, #047857);
+        border-radius: 14px;
+        color: #fff;
+        padding: 1.5rem 1.75rem;
+        box-shadow: 0 12px 24px rgba(6, 78, 59, 0.16);
+    }
+    .settings-hero h2 { color: #fff; margin-bottom: .35rem; }
+    .settings-hero p { color: rgba(255,255,255,.78); margin-bottom: 0; }
+    .settings-section { border: 1px solid var(--border-default); border-radius: 10px; padding: 1.25rem; height: 100%; background: #fff; }
+    .settings-section-title { display: flex; align-items: center; gap: .65rem; font-size: 1rem; margin-bottom: 1rem; }
+    .settings-section-title i { color: var(--primary-600); width: 1.25rem; text-align: center; }
+    .settings-field label { font-size: .82rem; font-weight: 700; color: var(--neutral-600); margin-bottom: .4rem; }
+    .settings-field .form-control, .settings-field .input-group-text { min-height: 42px; }
+    .settings-field .input-group-text { background: var(--primary-50); color: var(--primary-800); border-color: var(--primary-100); font-size: .78rem; font-weight: 700; }
+    .settings-save-bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-top: 1px solid var(--border-default); margin-top: 1.5rem; padding-top: 1.25rem; }
+    @media (max-width: 575px) { .settings-save-bar { align-items: stretch; flex-direction: column; } .settings-save-bar .btn { width: 100%; } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="settings-hero mb-4">
+    <h2><i class="fas fa-sliders-h me-2"></i>Make alerts fit your workflow</h2>
+    <p>Choose when the system should bring a payment, cylinder, or customer follow-up to your attention.</p>
+</div>
+<div class="card">
+    <div class="card-body p-3 p-md-4">
+        <p class="text-muted mb-4">Use days plus extra hours for precise timing. For example, 7 days and 3 hours means 171 hours. Cylinder timing at 0 days and 0 hours means an immediate alert.</p>
+        <form method="post">
+            {% csrf_token %}
+            <div class="row g-3">
+                <div class="col-lg-6"><section class="settings-section"><h3 class="settings-section-title"><i class="fas fa-coins"></i>Payment alerts</h3><div class="settings-field mb-3"><label>Pending payment after</label><div class="input-group"><span class="input-group-text">Days</span>{{ form.pending_payment_delay_days }}<span class="input-group-text">Hours</span>{{ form.pending_payment_delay_hours }}</div>{{ form.pending_payment_delay_days.errors }}{{ form.pending_payment_delay_hours.errors }}</div><div class="settings-field"><label>Minimum pending payment (PKR)</label>{{ form.pending_payment_minimum }}{{ form.pending_payment_minimum.errors }}</div></section></div>
+                <div class="col-lg-6"><section class="settings-section"><h3 class="settings-section-title"><i class="fas fa-gas-pump"></i>Cylinder alerts</h3><div class="settings-field mb-3"><label>Cylinder alert after</label><div class="input-group"><span class="input-group-text">Days</span>{{ form.cylinder_due_delay_days }}<span class="input-group-text">Hours</span>{{ form.cylinder_due_delay_hours }}</div>{{ form.cylinder_due_delay_days.errors }}{{ form.cylinder_due_delay_hours.errors }}</div><div class="settings-field"><label>Minimum cylinders held</label>{{ form.cylinder_due_minimum }}{{ form.cylinder_due_minimum.errors }}</div></section></div>
+                <div class="col-lg-6"><section class="settings-section"><h3 class="settings-section-title"><i class="fas fa-user-clock"></i>Customer activity</h3><div class="settings-field mb-3"><label>Inactive customer after</label><div class="input-group"><span class="input-group-text">Days</span>{{ form.inactive_customer_delay_days }}<span class="input-group-text">Hours</span>{{ form.inactive_customer_delay_hours }}</div>{{ form.inactive_customer_delay_days.errors }}{{ form.inactive_customer_delay_hours.errors }}</div><div class="settings-field"><label>Not coming after</label><div class="input-group"><span class="input-group-text">Days</span>{{ form.not_coming_customer_delay_days }}<span class="input-group-text">Hours</span>{{ form.not_coming_customer_delay_hours }}</div>{{ form.not_coming_customer_delay_days.errors }}{{ form.not_coming_customer_delay_hours.errors }}</div></section></div>
+                <div class="col-lg-6"><section class="settings-section"><h3 class="settings-section-title"><i class="fas fa-calendar-check"></i>Weekly follow-up</h3><div class="form-check form-switch mt-2">{{ form.weekly_reminder_enabled }} <label class="form-check-label">Enable Monday weekly summary</label></div><p class="small text-muted mt-3 mb-0">Receive a weekly overview of customers with pending payments or cylinders.</p></section></div>
+                <div class="col-lg-6"><section class="settings-section"><h3 class="settings-section-title"><i class="fas fa-database"></i>Backup reminder</h3><div class="settings-field"><label>Remind me after</label><div class="input-group"><span class="input-group-text">Days</span>{{ form.backup_reminder_delay_days }}<span class="input-group-text">Hours</span>{{ form.backup_reminder_delay_hours }}</div>{{ form.backup_reminder_delay_days.errors }}{{ form.backup_reminder_delay_hours.errors }}<p class="small text-muted mt-2 mb-0">The reminder returns when no successful backup has been recorded during this interval.</p></div></section></div>
+            </div>
+            {% if form.non_field_errors %}{{ form.non_field_errors }}{% endif %}
+            <div class="settings-save-bar"><span class="small text-muted"><i class="fas fa-shield-alt me-1"></i>Changes apply to the next automatic check.</span><button type="submit" class="btn btn-primary"><i class="fas fa-save me-2"></i>Save Settings</button></div>
+        </form>
+    </div>
+</div>
+{% endblock %}

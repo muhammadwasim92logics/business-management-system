@@ -1,0 +1,285 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Deliveries - GBMS{% endblock %}
+{% block page_title %}Delivery Management{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <p class="text-muted mb-0">Manage and track all deliveries</p>
+    </div>
+    <a href="{% url 'deliveries:add' %}" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>New Delivery
+    </a>
+</div>
+
+<!-- Filter Section -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Deliveries</h5>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Date From</label>
+                <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Date To</label>
+                <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Customer</label>
+                <input type="text" name="customer" class="form-control" placeholder="Search..." value="{{ customer_filter }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Product</label>
+                <select name="product" class="form-select">
+                    <option value="">All Products</option>
+                    {% for product in all_products %}
+                    <option value="{{ product.name }}" {% if product_filter == product.name %}selected{% endif %}>
+                        {{ product.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <div class="d-flex gap-2 w-100">
+                    <button type="submit" class="btn btn-primary flex-grow-1">
+                        <i class="fas fa-search me-2"></i>Filter
+                    </button>
+                    <a href="{% url 'deliveries:list' %}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i>
+                    </a>
+                </div>
+            </div>
+        </form>
+        
+        <!-- Quick Date Filters -->
+        <div class="mt-3">
+            <span class="text-muted me-2">Quick filters:</span>
+            <a href="?date_from={% now 'Y-m-d' %}&date_to={% now 'Y-m-d' %}" class="btn btn-sm btn-outline-primary me-1">Today</a>
+            <a href="?date_from={{ today|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-outline-primary me-1">Yesterday</a>
+            <a href="?date_from={{ week_ago|date:'Y-m-d' }}&date_to={% now 'Y-m-d' %}" class="btn btn-sm btn-outline-primary me-1">This Week</a>
+            <a href="?date_from={{ month_ago|date:'Y-m-d' }}&date_to={% now 'Y-m-d' %}" class="btn btn-sm btn-outline-primary me-1">This Month</a>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card border-primary">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-primary me-3">
+                    <i class="fas fa-truck"></i>
+                </div>
+                <div>
+                    <small class="text-muted stat-label">Total Deliveries</small>
+                    <h3 class="stat-number">{{ total_deliveries }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card border-success">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-success me-3">
+                    <i class="fas fa-coins"></i>
+                </div>
+                <div>
+                    <small class="text-muted stat-label">Total Amount</small>
+                    <h3 class="stat-number text-success">PKR {{ total_amount|floatformat:0 }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card border-warning">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-warning me-3">
+                    <i class="fas fa-boxes"></i>
+                </div>
+                <div>
+                    <small class="text-muted stat-label">Total Cylinders</small>
+                    <h3 class="stat-number text-warning">{{ total_quantity }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card border-info">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-info me-3">
+                    <i class="fas fa-undo"></i>
+                </div>
+                <div>
+                    <small class="text-muted stat-label">Empty Returned</small>
+                    <h3 class="stat-number text-info">{{ total_empty }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Product Summary -->
+{% if product_summary %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Product Summary</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th class="text-center">Quantity</th>
+                        <th class="text-center">Returned</th>
+                        <th class="text-end">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in product_summary %}
+                    <tr>
+                        <td>{{ item.name }}</td>
+                        <td class="text-center">{{ item.quantity }}</td>
+                        <td class="text-center">{{ item.returns }}</td>
+                        <td class="text-end">PKR {{ item.amount|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Daily Breakdown -->
+{% if daily_data %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-calendar-day me-2"></i>Daily Breakdown</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th class="text-center">Deliveries</th>
+                        <th class="text-center">Cylinders</th>
+                        <th class="text-end">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for day in daily_data %}
+                    <tr>
+                        <td>{{ day.date }}</td>
+                        <td class="text-center">{{ day.count }}</td>
+                        <td class="text-center">{{ day.quantity }}</td>
+                        <td class="text-end">PKR {{ day.amount|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Deliveries Table -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-list me-2"></i>Delivery List</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Delivery No</th>
+                        <th>Customer</th>
+                        <th>Product</th>
+                        <th class="text-center">Qty</th>
+                        <th class="text-center">Empty Returned</th>
+                        <th class="text-end">Amount</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for delivery in deliveries %}
+                    <tr>
+                        <td><strong>{{ delivery.delivery_no }}</strong></td>
+                        <td>
+                            <a href="{% url 'customers:detail' delivery.customer.pk %}">
+                                {{ delivery.customer.name }}
+                            </a>
+                        </td>
+                        <td>{{ delivery.product.name }}</td>
+                        <td class="text-center">{{ delivery.quantity }}</td>
+                        <td class="text-center">{{ delivery.empty_returned|default:"0" }}</td>
+                        <td class="text-end">PKR {{ delivery.delivery_amount|floatformat:2 }}</td>
+                        <td>{{ delivery.delivery_date }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted">
+                            <i class="fas fa-truck fa-2x mb-2 d-block"></i>
+                            No deliveries found for the selected filters.
+                            <a href="{% url 'deliveries:add' %}" class="text-primary">Create a delivery</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <nav class="mt-3">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&{{ request.GET.urlencode }}">Previous</a>
+                </li>
+                {% endif %}
+                <li class="page-item active">
+                    <span class="page-link">{{ page_obj.number }}</span>
+                </li>
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&{{ request.GET.urlencode }}">Next</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Export Options -->
+<div class="mt-3 text-center">
+    <button onclick="window.print()" class="btn btn-secondary">
+        <i class="fas fa-print me-2"></i>Print Report
+    </button>
+    <a href="?{{ request.GET.urlencode }}&export=excel" class="btn btn-success">
+        <i class="fas fa-file-excel me-2"></i>Export Excel
+    </a>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auto-submit form when date fields change
+    document.addEventListener('DOMContentLoaded', function() {
+        const dateInputs = document.querySelectorAll('input[type="date"]');
+        dateInputs.forEach(function(input) {
+            input.addEventListener('change', function() {
+                this.closest('form').submit();
+            });
+        });
+    });
+</script>
+{% endblock %}

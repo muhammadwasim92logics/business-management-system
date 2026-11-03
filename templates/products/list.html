@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Products - GBMS{% endblock %}
+{% block page_title %}Product Management{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <p class="text-muted mb-0">Manage your product inventory</p>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <form method="get" action="{% url 'products:list' %}" class="d-flex gap-2" role="search">
+            <label for="productSearch" class="visually-hidden">Search products</label>
+            <input type="search" id="productSearch" name="q" class="form-control" value="{{ search_query }}"
+                   placeholder="Search name or code..." autocomplete="off">
+            <button type="submit" class="btn btn-primary" title="Search products">
+                <i class="fas fa-search me-1"></i>Search
+            </button>
+            {% if search_query %}
+            <a href="{% url 'products:list' %}" class="btn btn-outline-secondary" title="Clear product search">
+                <i class="fas fa-times"></i>
+            </a>
+            {% endif %}
+        </form>
+        <a href="{% url 'products:add' %}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Add Product
+        </a>
+        <a href="{% url 'products:factory_fill' %}" class="btn btn-dark">
+            <i class="fas fa-industry me-2"></i>Factory Fill
+        </a>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h6 class="card-title">Total Products</h6>
+                <h3 class="mb-0">{{ total_products }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h6 class="card-title">Sales Products</h6>
+                <h3 class="mb-0">{{ sellable_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-info text-dark">
+            <div class="card-body">
+                <h6 class="card-title">Purchase Products</h6>
+                <h3 class="mb-0">{{ purchasable_count }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if search_query %}
+        <div class="alert alert-info py-2 d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-filter me-2"></i>Showing products matching <strong>{{ search_query }}</strong>.</span>
+            <span class="badge bg-info text-dark">{{ products|length }} result{{ products|length|pluralize }}</span>
+        </div>
+        {% endif %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Product Name</th>
+                        <th class="text-center">Sales</th>
+                        <th class="text-center">Purchases</th>
+                        <th class="text-center">Type</th>
+                        <th class="text-end">Selling Price</th>
+                        <th class="text-end">Purchase Price</th>
+                        <th class="text-center">Full Stock</th>
+                        <th class="text-center">Empty Stock</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in products %}
+                    <tr>
+                        <td><strong>{{ product.product_code }}</strong></td>
+                        <td><strong>{{ product.name }}</strong></td>
+                        <td class="text-center">
+                            {% if product.is_sellable %}
+                                <span class="badge bg-success"><i class="fas fa-check"></i></span>
+                            {% else %}
+                                <span class="badge bg-secondary"><i class="fas fa-times"></i></span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if product.is_purchasable %}
+                                <span class="badge bg-info text-dark"><i class="fas fa-check"></i></span>
+                            {% else %}
+                                <span class="badge bg-secondary"><i class="fas fa-times"></i></span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if product.is_filling_only %}
+                                <span class="badge bg-warning text-dark">Filling Only</span>
+                            {% elif product.is_quantity_only %}
+                                <span class="badge bg-info text-dark">Sale Only</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Cylinder Exchange</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">{{ product.unit_price|floatformat:2 }}</td>
+                        <td class="text-end">{{ product.purchase_price|floatformat:2 }}</td>
+                        <td class="text-center">
+                            <span class="badge {% if product.stock_quantity <= product.minimum_stock %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                                {{ product.stock_quantity }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-secondary">{{ product.empty_stock_quantity }}</span>
+                        </td>
+                        <td class="text-center">
+                            {% if product.stock_quantity <= product.minimum_stock %}
+                                <span class="badge bg-warning text-dark">Low Stock</span>
+                            {% else %}
+                                <span class="badge bg-success">In Stock</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'products:edit' product.pk %}" class="btn btn-sm btn-primary" title="Edit Product">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="{% url 'products:delete' product.pk %}" class="btn btn-sm btn-danger" title="Delete Product">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="text-center py-4 text-muted">
+                            <i class="fas fa-boxes fa-2x mb-2 d-block"></i>
+                            No products available. 
+                            <a href="{% url 'products:add' %}" class="text-primary">Add your first product</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div><h5 class="mb-1"><i class="fas fa-industry me-2"></i>Factory cylinder filling</h5><p class="text-muted mb-0">Send empty cylinders and track what comes back full.</p></div>
+            <a href="{% url 'products:factory_fill' %}" class="btn btn-outline-dark">Manage Factories</a>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            {% for factory in factories %}<a href="{% url 'products:factory_detail' factory.pk %}" class="btn btn-dark"><i class="fas fa-industry me-2"></i>{{ factory.name }}</a>{% empty %}<span class="text-muted">No factories added yet.</span>{% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

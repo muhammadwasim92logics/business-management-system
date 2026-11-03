@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}All Stock - GBMS{% endblock %}
+{% block page_title %}All Stock{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+        <h4 class="mb-1">Complete Gas Stock</h4>
+        <p class="text-muted mb-0">All purchases and customer dispatches, with or without tax.</p>
+    </div>
+    <a class="btn btn-outline-primary" href="{% url 'products:stock_details' %}">
+        <i class="fas fa-file-invoice me-1"></i>Tax Stock Details
+    </a>
+</div>
+
+{% if low_stock_rows %}
+<div class="alert alert-warning">
+    <strong><i class="fas fa-triangle-exclamation me-1"></i>Low stock:</strong>
+    {% for row in low_stock_rows %}{{ row.product_name }} ({{ row.current_stock|floatformat:2 }} {{ row.unit }}){% if not forloop.last %}, {% endif %}{% endfor %}
+    <span class="d-block small mt-1">The notification checker will also flag these products.</span>
+</div>
+{% endif %}
+
+<div class="card stock-report-card">
+    <div class="table-responsive">
+        <table class="table table-hover table-bordered mb-0 align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Gas</th><th>Unit</th>
+                    <th class="text-end">Total Purchased</th>
+                    <th class="text-end">Total Dispatched</th>
+                    <th class="text-end">Stock Remaining</th>
+                    <th class="text-end">Minimum</th><th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in stock_rows %}
+                <tr{% if row.is_low %} class="table-warning"{% endif %}>
+                    <td class="fw-bold">
+                        {{ row.product_name }}
+                        {% if row.size_details %}
+                        <div class="small text-muted mt-1">
+                            {% for detail in row.size_details %}
+                            {{ detail.size }}: {{ detail.capacity }} m³<br>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>{{ row.unit }}</td>
+                    <td class="text-end">{{ row.purchased|floatformat:2 }}</td>
+                    <td class="text-end">{{ row.dispatched|floatformat:2 }}</td>
+                    <td class="text-end fw-bold">{{ row.current_stock|floatformat:2 }}</td>
+                    <td class="text-end">{{ row.minimum_stock|floatformat:2 }}</td>
+                    <td>{% if row.is_low %}<span class="badge bg-warning text-dark">Low</span>{% else %}<span class="badge bg-success">OK</span>{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="8" class="text-center py-5 text-muted">No oxygen or nitrogen stock records found.</td></tr>
+                {% endfor %}
+            </tbody>
+            <tfoot class="table-success fw-bold">
+                <tr><td colspan="3">Totals</td><td class="text-end">{{ total_purchased|floatformat:2 }}</td><td class="text-end">{{ total_dispatched|floatformat:2 }}</td><td colspan="3"></td></tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% endblock %}

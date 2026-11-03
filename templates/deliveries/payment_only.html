@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Payment Only - GBMS{% endblock %}
+{% block page_title %}💰 Payment Only{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-7 col-lg-6 mx-auto">
+        <div class="card form-card">
+            <div class="card-header card-header-gradient">
+                <h5 class="mb-0 d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-hand-holding-usd me-2"></i>Record Payment Only</span>
+                    <span class="badge bg-light text-dark"><i class="fas fa-receipt me-1"></i>No products required</span>
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <form method="post" id="paymentForm">
+                    {% csrf_token %}
+                    
+                    <!-- Customer Selection -->
+                    <div class="mb-3">
+                        <label class="form-label"><i class="fas fa-user text-primary me-1"></i>Select Customer *</label>
+                        <select name="customer_id" id="customer_id" class="form-select" 
+                                onchange="loadCustomerBalance(this.value)" required>
+                            <option value="">-- Select Customer --</option>
+                            {% for customer in customers %}
+                            <option value="{{ customer.pk }}">{{ customer.name }} ({{ customer.customer_code }}) - {{ customer.mobile }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Customer Balance Display - Instant Notification -->
+                    <div id="customerBalance" class="customer-balance-card mb-3" style="display: none;">
+                        <strong class="text-primary"><i class="fas fa-wallet me-1"></i>Customer Balance Status:</strong>
+                        <div id="balanceInfo" class="mt-1 fw-bold">Loading...</div>
+                    </div>
+                    
+                    <!-- Payment Details -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label"><i class="fas fa-money-bill-wave text-success me-1"></i>Payment Amount *</label>
+                            <div class="input-group">
+                                <span class="input-group-text fw-bold">PKR</span>
+                                <input type="number" name="payment_amount" id="payment_amount" class="form-control" 
+                                       step="0.01" min="0.01" placeholder="Enter amount" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label"><i class="fas fa-credit-card text-info me-1"></i>Payment Type</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-exchange-alt"></i></span>
+                                <select name="payment_type" id="payment_type" class="form-select">
+                                    <option value="cash">Cash</option>
+                                    <option value="transfer">Bank Transfer</option>
+                                    <option value="upi">UPI / Online</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label"><i class="fas fa-sticky-note text-secondary me-1"></i>Notes</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-pen"></i></span>
+                            <textarea name="notes" id="notes" class="form-control" rows="2" 
+                                      placeholder="Optional notes or reference number"></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Summary Card -->
+                    <div class="customer-balance-card my-3">
+                        <div class="row text-center align-items-center">
+                            <div class="col-md-4 mb-2 mb-md-0">
+                                <small class="text-muted d-block">Previous Balance</small>
+                                <span id="prevBalance" class="fw-bold text-primary fs-6">—</span>
+                            </div>
+                            <div class="col-md-4 mb-2 mb-md-0">
+                                <small class="text-muted d-block">Payment Received</small>
+                                <span id="paymentDisplay" class="fw-bold text-success fs-6">PKR 0.00</span>
+                            </div>
+                            <div class="col-md-4">
+                                <small class="text-muted d-block">New Balance</small>
+                                <span id="newBalance" class="fw-bold text-danger fs-6">—</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-success btn-lg flex-grow-1">
+                            <i class="fas fa-save me-2"></i>Record Payment
+                        </button>
+                        <a href="{% url 'deliveries:daily_entry' %}" class="btn btn-outline-secondary btn-lg">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    function loadCustomerBalance(customerId) {
+        if (!customerId) {
+            document.getElementById('customerBalance').style.display = 'none';
+            document.getElementById('prevBalance').textContent = '—';
+            document.getElementById('newBalance').textContent = '—';
+            return;
+        }
+        
+        const balanceDiv = document.getElementById('customerBalance');
+        const balanceInfo = document.getElementById('balanceInfo');
+        
+        balanceDiv.style.display = 'block';
+        balanceInfo.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading customer balance...';
+        
+        fetch(`/deliveries/daily/get-customer-balance/?customer_id=${customerId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    balanceInfo.innerHTML = `<span class="text-danger">❌ ${data.error}</span>`;
+                    return;
+                }
+                
+                const outstanding = data.outstanding;
+                let statusHtml = '';
+                let statusClass = '';
+                
+                if (outstanding > 100) {
+                    statusHtml = `<span class="text-danger fw-bold">⚠️ Outstanding Balance: PKR ${outstanding.toFixed(2)}</span>`;
+                    statusClass = 'danger';
+                } else if (outstanding > 0) {
+                    statusHtml = `<span class="text-warning fw-bold">📊 Outstanding Balance: PKR ${outstanding.toFixed(2)}</span>`;
+                    statusClass = 'warning';
+                } else if (outstanding < 0) {
+                    statusHtml = `<span class="text-success fw-bold">💰 Advance Balance: PKR ${Math.abs(outstanding).toFixed(2)}</span>`;
+                    statusClass = 'success';
+                } else {
+                    statusHtml = `<span class="text-success fw-bold">✅ Balance Clear</span>`;
+                    statusClass = 'success';
+                }
+                
+                balanceInfo.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>${data.customer_name}</strong>
+                            <br><small class="text-muted">${data.customer_code}</small>
+                            <br><small class="text-muted">📱 ${data.customer_mobile || 'No mobile'}</small>
+                        </div>
+                        <div class="col-md-6">
+                            ${statusHtml}
+                            <br><small class="text-muted">
+                                Total Billed: PKR ${data.total_billed.toFixed(2)} | 
+                                Total Paid: PKR ${data.total_paid.toFixed(2)}
+                            </small>
+                            ${data.last_activity ? `<br><small class="text-muted">Last Activity: ${data.last_activity}</small>` : ''}
+                        </div>
+                    </div>
+                `;
+                
+                // Update summary
+                document.getElementById('prevBalance').textContent = `PKR ${outstanding.toFixed(2)}`;
+                document.getElementById('prevBalance').className = outstanding > 0 ? 'text-danger' : 'text-success';
+                
+                // Update new balance when payment amount changes
+                updateNewBalance();
+            })
+            .catch(error => {
+                balanceInfo.innerHTML = '<span class="text-danger">❌ Error loading balance</span>';
+            });
+    }
+    
+    function updateNewBalance() {
+        const prevBalanceText = document.getElementById('prevBalance').textContent;
+        const paymentAmount = parseFloat(document.getElementById('payment_amount').value) || 0;
+        
+        if (prevBalanceText && prevBalanceText !== '—') {
+            const prevBalance = parseFloat(prevBalanceText.replace('PKR ', '').replace(',', '')) || 0;
+            const newBalance = prevBalance - paymentAmount;
+            
+            document.getElementById('paymentDisplay').textContent = `PKR ${paymentAmount.toFixed(2)}`;
+            
+            if (newBalance > 0) {
+                document.getElementById('newBalance').textContent = `PKR ${newBalance.toFixed(2)}`;
+                document.getElementById('newBalance').className = 'text-danger fw-bold';
+            } else if (newBalance < 0) {
+                document.getElementById('newBalance').textContent = `PKR ${Math.abs(newBalance).toFixed(2)} (Advance)`;
+                document.getElementById('newBalance').className = 'text-success fw-bold';
+            } else {
+                document.getElementById('newBalance').textContent = 'PKR 0.00 (Cleared)';
+                document.getElementById('newBalance').className = 'text-success fw-bold';
+            }
+        }
+    }
+    
+    // Update new balance when payment amount changes
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('payment_amount').addEventListener('input', updateNewBalance);
+
+        const paymentForm = document.getElementById('paymentForm');
+        if (paymentForm) {
+            paymentForm.addEventListener('submit', function(e) {
+                const btn = paymentForm.querySelector('button[type="submit"]');
+                if (btn) {
+                    if (btn.disabled) {
+                        e.preventDefault();
+                        return false;
+                    }
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Recording...';
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
+{% endblock %}

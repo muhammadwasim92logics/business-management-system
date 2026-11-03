@@ -1,0 +1,2055 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Purchase Entry - GBMS{% endblock %}
+{% block page_title %}📥 Purchase Entry{% endblock %}
+
+{% block content %}
+
+<!-- ============================================================
+SECTION 1: DATE FILTER AND VIEW ENTRIES (TOP)
+============================================================ -->
+<div class="card mb-4">
+    <div class="card-header bg-success text-white">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 class="mb-0">
+                <i class="fas fa-list me-2"></i>
+                Purchases for {{ selected_date|date:'d M Y' }}
+                {% if selected_date != today %}
+                <span class="badge bg-warning text-dark ms-2">Past Date</span>
+                {% endif %}
+            </h5>
+            <form method="get" class="d-flex gap-2 align-items-center">
+                <input type="date" name="date" class="form-control form-control-sm" value="{{ selected_date|date:'Y-m-d' }}">
+                <button type="submit" class="btn btn-light btn-sm">
+                    <i class="fas fa-search me-1"></i>View
+                </button>
+            </form>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div>
+                <a href="?date={{ prev_date|date:'Y-m-d' }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-chevron-left me-1"></i>{{ prev_date|date:'d M' }}
+                </a>
+                <a href="?date={{ next_date|date:'Y-m-d' }}" class="btn btn-outline-secondary btn-sm {% if not has_next %}disabled{% endif %}">
+                    {{ next_date|date:'d M' }}<i class="fas fa-chevron-right ms-1"></i>
+                </a>
+                {% if selected_date != today %}
+                <a href="?date={{ today|date:'Y-m-d' }}" class="btn btn-outline-primary btn-sm ms-2">
+                    <i class="fas fa-calendar-day me-1"></i>Go to Today
+                </a>
+                {% endif %}
+            </div>
+            <span class="text-muted">Select any date to view or add purchase entries.</span>
+        </div>
+
+        {% if activities %}
+        <div class="table-responsive">
+            <table class="table table-hover table-bordered table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Purchase No</th>
+                        <th>Invoice</th>
+                        <th>Supplier</th>
+                        <th>Product</th>
+                        <th class="text-center">Qty</th>
+                        <th class="text-center">m³</th>
+                        <th class="text-end">Rate </th>
+                        <th class="text-end">Rate w/o Tax</th>
+                        <th class="text-end">Tax/M³</th>
+                        <th class="text-end">Rate w/ Tax/M³</th>
+                        <th class="text-end">Rate/Cylinder</th>
+                        <th class="text-end">Subtotal</th>
+                        <th class="text-end">Tax</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-end">Delivery</th>
+                        <th class="text-end">Extra</th>
+                        <th class="text-end">Paid</th>
+                        <th class="text-end">Previous Balance</th>
+                        <th class="text-end">Balance</th>
+                        <th class="text-start">Description / Split</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for activity in activities %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td><small>{{ activity.purchase_no }}</small></td>
+                    <td><small>{{ activity.invoice_no|default:"—" }}</small></td>
+                    <td><strong>{{ activity.supplier_name }}</strong></td>
+                    <td>{{ activity.product_name }}</td>
+                   <td class="text-center">
+                        {% if activity.is_argon %}
+                            <span class="badge bg-info text-dark">{{ activity.quantity|floatformat:2 }} M³</span>
+                        {% elif activity.is_oxygen or activity.is_nitrogen %}
+                            <span class="badge bg-primary text-white">{{ activity.quantity|floatformat:2 }} KG</span>
+                        {% else %}
+                            {{ activity.quantity|floatformat:2 }}
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if activity.is_argon %}
+                            <strong class="text-primary">{{ activity.quantity|floatformat:2 }}</strong>
+                        {% elif activity.cubic_meters > 0 %}
+                            <span class="badge bg-info text-dark">{{ activity.cubic_meters|floatformat:4 }} M³</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <span class="d-block {% if activity.is_lpg %}text-primary fw-bold{% endif %}">
+                            {% if activity.is_lpg %}
+                                PKR {{ activity.rate_per_kg|floatformat:2 }}
+                            {% else %}
+                                PKR {{ activity.unit_price|floatformat:2 }}
+                            {% endif %}
+                        </span>
+                        {% if activity.is_lpg %}
+                        <small class="text-muted">Rate per KG (PKR)</small>
+                        {% endif %}
+                    </td>
+<td class="text-end">
+    {% if activity.rate_without_tax > 0 %}
+        <span class="text-info">PKR {{ activity.rate_without_tax|floatformat:2 }}</span>
+    {% else %}
+        <span class="text-muted">—</span>
+    {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if activity.tax_per_m3 > 0 %}
+                            <span class="text-danger">PKR {{ activity.tax_per_m3|floatformat:2 }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if activity.rate_with_tax_per_m3 > 0 %}
+                            <span class="text-success">PKR {{ activity.rate_with_tax_per_m3|floatformat:2 }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if activity.rate_per_cylinder > 0 %}
+                            PKR {{ activity.rate_per_cylinder|floatformat:2 }}
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">PKR {{ activity.subtotal_amount|floatformat:2 }}</td>
+                    <td class="text-end">
+                        {% if activity.sales_tax_amount > 0 %}
+                            <span class="text-danger">PKR {{ activity.sales_tax_amount|floatformat:2 }}</span>
+                        {% else %}
+                            <span class="text-muted">PKR 0.00</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end"><span class="text-primary">PKR {{ activity.total_amount|floatformat:2 }}</span></td>
+                    <td class="text-end">PKR {{ activity.delivery_charges|floatformat:2 }}</td>
+                    <td class="text-end text-warning">PKR {{ activity.extra_charges|floatformat:2 }}</td>
+                    <td class="text-end"><span class="text-success">PKR {{ activity.paid_amount|floatformat:2 }}</span></td>
+                    <td class="text-end">PKR {{ activity.old_balance|floatformat:2 }}</td>
+                    <td class="text-end">
+                        <span class="fw-bold {% if activity.new_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                            PKR {{ activity.new_balance|floatformat:2 }}
+                        </span>
+                    </td>
+                    <td class="text-start">
+                        {% if activity.is_argon %}
+                            <span class="badge {% if activity.sales_tax_amount > 0 %}bg-danger{% else %}bg-secondary{% endif %} me-1">
+                                {% if activity.sales_tax_amount > 0 %}With Tax{% else %}Without Tax{% endif %}
+                            </span>
+                            <small class="text-muted">{{ activity.quantity|floatformat:2 }} M³</small>
+                        {% else %}
+                            {% if activity.description %}
+                                <span class="badge bg-warning text-dark">{{ activity.description }}</span>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-primary btn-sm" onclick="openEditModal('{{ activity.id }}')" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="deletePurchase('{{ activity.id }}')" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+                <tfoot class="table-success">
+                    <tr>
+                        <td colspan="5"><strong>TOTAL</strong></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td class="text-end"><strong>PKR {{ total_subtotal|floatformat:2 }}</strong></td>
+                        <td class="text-end"><strong>PKR {{ total_sales_tax|floatformat:2 }}</strong></td>
+                        <td class="text-end"><strong>PKR {{ total_amount|floatformat:2 }}</strong></td>
+                        <td class="text-end"><strong>PKR {{ total_delivery_charges|floatformat:2 }}</strong></td>
+                        <td class="text-end"><strong>PKR {{ total_extra_charges|floatformat:2 }}</strong></td>
+                        <td class="text-end"><strong>PKR {{ total_paid|floatformat:2 }}</strong></td>
+                        <td></td>
+                        <td class="text-end"><strong>PKR {{ net_balance|floatformat:2 }}</strong></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-3">
+            <p class="text-muted">No purchases recorded for {{ selected_date|date:'d M Y' }}.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ============================================================
+SECTION 2: ADD NEW PURCHASE ENTRIES
+============================================================ -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white sticky-header">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 class="mb-0">
+                <i class="fas fa-plus-circle me-2"></i>
+                Add New Purchases for {{ selected_date|date:'d M Y' }}
+                <small class="text-light ms-2">{{ selected_date|date:'Y-m-d' }}</small>
+            </h5>
+            <span class="badge bg-light text-dark" id="entryCount">0 Entries</span>
+        </div>
+    </div>
+    
+    <div class="card-body" style="padding: 0;">
+        <form method="post" id="purchaseEntryForm">
+            {% csrf_token %}
+            <input type="hidden" name="selected_date" value="{{ selected_date|date:'Y-m-d' }}">
+            
+            <div id="entriesContainerWrapper" class="entries-scroll-wrapper">
+                <div id="entriesContainer">
+                    <!-- Entries will be added by JavaScript -->
+                </div>
+            </div>
+            
+            <div class="sticky-footer p-3 border-top bg-light">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <button type="button" class="btn btn-success btn-sm" onclick="addEntryBlock(true)">
+                            <i class="fas fa-plus me-1"></i>Add One More Entry
+                        </button>
+                        <button type="button" class="btn btn-info btn-sm" onclick="refreshEntries()">
+                            <i class="fas fa-sync me-1"></i>Refresh
+                        </button>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary" id="saveAllBtn">
+                            <i class="fas fa-save me-1"></i>Save All Entries
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" onclick="clearAllEntries()">
+                            <i class="fas fa-trash me-1"></i>Clear All
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Edit Purchase Modal -->
+<div class="modal fade" id="editPurchaseModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Purchase Entry</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editPurchaseForm">
+                    <input type="hidden" id="edit_entry_id">
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Supplier</label>
+                            <select id="edit_supplier_id" class="form-select">
+                                <option value="">-- Select Supplier --</option>
+                                {% for supplier in suppliers %}
+                                <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Product</label>
+                            <select id="edit_product_id" class="form-select">
+                                <option value="">-- Select Product --</option>
+                                {% for product in products %}
+                                <option value="{{ product.id }}">{{ product.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Total Qty</label>
+                            <input type="number" id="edit_quantity" class="form-control" step="0.01" min="0.01">
+                            <small class="text-muted" id="edit_qty_unit">kg</small>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Taxable Qty</label>
+                            <input type="number" id="edit_taxable_qty" class="form-control" step="0.01" min="0">
+                            <small class="text-muted" id="edit_taxable_unit">Leave 0 for fully non-taxable</small>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Unit Price (PKR)</label>
+                            <input type="number" id="edit_unit_price" class="form-control" step="0.01" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Delivery Charges</label>
+                            <input type="number" id="edit_delivery_charges" class="form-control" step="0.01" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Paid Amount</label>
+                            <input type="number" id="edit_paid_amount" class="form-control" step="0.01" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Tax Type</label>
+                            <select id="edit_tax_type" class="form-select">
+                                <option value="none">Without Sales Tax</option>
+                                <option value="with_tax">With Sales Tax</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Tax Rate (%)</label>
+                            <input type="number" id="edit_sales_tax_rate" class="form-control" step="0.01" min="0" value="17">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Payment Type</label>
+                            <select id="edit_payment_type" class="form-select">
+                                <option value="cash">Cash</option>
+                                <option value="transfer">Bank Transfer</option>
+                                <option value="cheque">Cheque</option>
+                                <option value="online">Online</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Invoice No</label>
+                            <input type="text" id="edit_invoice_no" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Purchase Date</label>
+                            <input type="date" id="edit_purchase_date" class="form-control">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold">Description</label>
+                            <input type="text" id="edit_description" class="form-control">
+                        </div>
+                        <div id="edit_argon_fields" style="display: none;">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Total M³</label>
+                                <input type="number" id="edit_total_m3" class="form-control" step="0.01" min="0">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Cylinders</label>
+                                <input type="number" id="edit_cylinder_qty" class="form-control" step="1" min="0">
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveEditPurchase()">
+                    <i class="fas fa-save me-1"></i>Update Purchase
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+
+<script>
+    // ============================================================
+    // Data
+    // ============================================================
+    var suppliersData = [
+        {% for supplier in suppliers %}
+        {id: "{{ supplier.pk }}", name: "{{ supplier.name|escapejs }}", code: "{{ supplier.supplier_code }}", mobile: "{{ supplier.mobile }}"},
+        {% endfor %}
+    ];
+    
+    var productsData = [
+        {% for product in products %}
+            {% if product.is_purchasable %}
+                {id: "{{ product.pk }}", name: "{{ product.name|escapejs }}", price: "{{ product.unit_price }}", is_quantity_only: {{ product.is_quantity_only|lower }}, is_filling_only: {{ product.is_filling_only|lower }}},
+            {% endif %}
+        {% endfor %}
+    ];
+    
+    var entryCounter = 0;
+    var DEFAULT_ENTRIES = 5;
+    var currentDate = '{{ selected_date|date:"Y-m-d" }}';
+
+    // ============================================================
+    // HELPER: Check if product is Argon, Special Argon, Gas Mix, DA, or Dry Air
+    // ============================================================
+    function isArgonProduct(productName) {
+        productName = productName.toLowerCase();
+        return productName.includes('argon') || 
+               productName.includes('special argon') || 
+               productName.includes('mixture') ||
+               productName.includes('da') || 
+               productName.includes('dry air') ||
+               productName.includes('da gas');
+    }
+
+    function isLPGProduct(productName) {
+        return productName.toLowerCase().includes('lpg');
+    }
+
+    function isOxygenProduct(productName) {
+        return productName.toLowerCase().includes('oxygen');
+    }
+
+    function isNitrogenProduct(productName) {
+        var name = productName.toLowerCase();
+        return name.includes('nitrogen') || name.includes('n2');
+    }
+
+    // ============================================================
+    // Toast Notification
+    // ============================================================
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast-custom ${type}`;
+        const icon = type === 'success' ? 'fa-check-circle' : 
+                     type === 'error' ? 'fa-exclamation-circle' : 
+                     'fa-exclamation-triangle';
+        toast.innerHTML = `
+            <i class="fas ${icon} me-2"></i>
+            ${message}
+            <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+        `;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s';
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
+    }
+
+    // ============================================================
+    // Load Existing Purchases
+    // ============================================================
+    function loadExistingEntries() {
+        document.getElementById('entriesContainer').innerHTML = '';
+        entryCounter = 0;
+        
+        for (let i = 0; i < DEFAULT_ENTRIES; i++) {
+            addEntryBlock(false);
+        }
+        updateEntryCount();
+    }
+
+    // ============================================================
+    // Add Entry Block (Dynamic based on Product Type)
+    // ============================================================
+    function addEntryBlock(scrollToEntry = true, entry = null) {
+        entryCounter++;
+        var container = document.getElementById('entriesContainer');
+        
+        var block = document.createElement('div');
+        block.className = 'entry-block card mb-3 p-3 border';
+        block.id = 'entry-' + entryCounter;
+        block.dataset.entryId = entry ? entry.id : '';
+        block.dataset.saved = entry ? 'true' : 'false';
+        block.style.backgroundColor = '#f8f9fa';
+        block.style.borderLeft = '1px solid #dee2e6';
+        
+        // Supplier Options
+        var supplierOptions = '<option value="">-- Select Supplier --</option>';
+        suppliersData.forEach(function(s) {
+            supplierOptions += '<option value="' + s.id + '">' + s.name + ' (' + s.code + ')</option>';
+        });
+        
+        // Product Options
+        var productOptions = '<option value="">-- Select Product --</option>';
+        productsData.forEach(function(p) {
+            var saleOnlyLabel = p.is_filling_only ? ' (Filling Only)' : (p.is_quantity_only ? ' (Sale Only)' : '');
+            productOptions += '<option value="' + p.id + '" data-price="' + p.price + '" data-is-qty-only="' + (p.is_quantity_only ? 'true' : 'false') + '" data-is-filling-only="' + (p.is_filling_only ? 'true' : 'false') + '">' + p.name + saleOnlyLabel + '</option>';
+        });
+        
+        block.innerHTML = `
+            <!-- Entry Header -->
+            <div class="row g-2 mb-2">
+                <div class="col-md-12">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <strong class="text-primary">Entry #${entryCounter}</strong>
+                        <span class="badge bg-warning ms-2" id="status_badge_${entryCounter}">
+                            <i class="fas fa-clock"></i> Unsaved
+                        </span>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="removeEntryBlock(${entryCounter})">
+                            <i class="fas fa-times"></i> Remove
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Supplier & Product Selection -->
+            <div class="row g-2 mb-2">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Supplier</label>
+                    <select name="supplier_id_${entryCounter}" id="supplier_id_${entryCounter}" class="form-select form-select-sm">
+                        ${supplierOptions}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Product</label>
+                    <select name="product_id_${entryCounter}" id="product_id_${entryCounter}" class="form-select form-select-sm product-select" onchange="updateProductPrice(this, ${entryCounter})">
+                        ${productOptions}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Invoice No</label>
+                    <input type="text" name="invoice_no_${entryCounter}" id="invoice_no_${entryCounter}" class="form-control form-control-sm" placeholder="Optional">
+                </div>
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col-md-12">
+                    <div id="supplier_history_${entryCounter}" class="small"></div>
+                </div>
+            </div>
+            
+            <!-- PRODUCT-SPECIFIC INPUT FIELDS -->
+            <div id="product_fields_${entryCounter}" class="row g-2 mb-2">
+                
+                <!-- TYPE 1 & 2: OXYGEN / NITROGEN / CO2 (KG based) -->
+                <div id="kg_fields_${entryCounter}" class="col-md-12 row g-2" style="display: none;">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small">Quantity (kg) *</label>
+                        <input type="number" id="kg_qty_${entryCounter}" name="quantity_${entryCounter}" 
+                            class="form-control form-control-sm qty-input" step="0.01" min="0.01" value="0" 
+                            oninput="calculateKgTotal(${entryCounter})">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small">Rate per KG (PKR)</label>
+                        <input type="number" id="kg_rate_${entryCounter}" name="unit_price_${entryCounter}" 
+                            class="form-control form-control-sm price-input" step="0.01" min="0" value="0" 
+                            oninput="calculateKgTotal(${entryCounter})">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small">Total Cubic Meters (Auto)</label>
+                        <input type="text" id="kg_m3_${entryCounter}" class="form-control form-control-sm" readonly value="0.0000">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small text-info">Rate without Tax (Auto)</label>
+                        <input type="text" id="kg_rate_without_tax_${entryCounter}" class="form-control form-control-sm bg-light" readonly value="0.00">
+                        <small class="text-muted">Rate per KG ÷ 1.18</small>
+                    </div>
+                    <div class="col-md-12 row g-2 mt-2">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small text-success">Total Amount (Without Tax)</label>
+                            <input type="text" id="kg_total_without_tax_${entryCounter}" class="form-control form-control-sm bg-light" readonly value="0.00">
+                            <small class="text-muted">Rate without Tax × M³</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small text-primary">Tax Amount</label>
+                            <input type="text" id="kg_tax_amount_${entryCounter}" class="form-control form-control-sm text-danger bg-light" readonly value="0.00">
+                            <small class="text-muted">Total Without Tax × Tax Rate</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small text-warning">Final Total (With Tax)</label>
+                            <input type="text" id="kg_final_total_${entryCounter}" class="form-control form-control-sm bg-light fw-bold" readonly value="0.00">
+                            <small class="text-muted">Total Without Tax + Tax Amount</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TYPE 3: ARGON / SPECIAL ARGON / GAS MIX / DA / DRY AIR (M³ based) -->
+                <div id="argon_fields_${entryCounter}" class="col-md-12 row g-2" style="display: none;">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small">Total Cubic Meters (M³)</label>
+                        <input type="number" id="argon_total_m3_${entryCounter}" 
+                            name="total_cubic_meters_${entryCounter}"
+                            class="form-control form-control-sm qty-input" step="0.01" min="0" value="0" 
+                            oninput="calculateArgonTotal(${entryCounter})">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small">Total Cylinders</label>
+                        <input type="number" id="argon_qty_${entryCounter}" 
+                            name="cylinder_qty_${entryCounter}"
+                            class="form-control form-control-sm qty-input" step="1" min="0" value="0" 
+                            oninput="calculateArgonTotal(${entryCounter})">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small">M³ / Cylinder (Auto)</label>
+                        <input type="text" id="argon_m3_per_cyl_${entryCounter}" class="form-control form-control-sm" readonly value="0.0000">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small">Rate per M³ (PKR)</label>
+                        <input type="number" id="argon_rate_${entryCounter}" name="unit_price_${entryCounter}" 
+                            class="form-control form-control-sm price-input" step="0.01" min="0" value="0" 
+                            oninput="calculateArgonTotal(${entryCounter})">
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small text-success">Rate with Tax (PKR)</label>
+                        <input type="text" id="argon_rate_with_tax_${entryCounter}" class="form-control form-control-sm bg-light" readonly value="0.00">
+                        <small class="text-muted">Rate + Tax per M³</small>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small text-danger">Tax per M³ (PKR)</label>
+                        <input type="text" id="argon_tax_per_m3_${entryCounter}" class="form-control form-control-sm bg-light" readonly value="0.00">
+                        <small class="text-muted">Tax amount per M³</small>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small text-primary">Rate per Cylinder (PKR)</label>
+                        <input type="text" id="argon_rate_per_cyl_${entryCounter}" class="form-control form-control-sm bg-light" readonly value="0.00">
+                        <small class="text-muted">Per cylinder with tax</small>
+                    </div>
+                    
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small text-info">Total Rate (PKR)</label>
+                        <input type="text" id="argon_total_rate_${entryCounter}" class="form-control form-control-sm bg-light" readonly value="0.00">
+                        <small class="text-muted">All cylinders with tax</small>
+                    </div>
+                </div>
+
+                <!-- TYPE 4: LPG (Cylinder based) - ENHANCED -->
+                <div id="lpg_fields_${entryCounter}" class="col-md-12 row g-2" style="display: none;">
+                    <div class="col-md-12 row g-2">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small">Total Rate (PKR)</label>
+                            <input type="number" id="lpg_rate_cyl_${entryCounter}" name="unit_price_${entryCounter}" 
+                                class="form-control form-control-sm price-input" step="0.01" min="0" value="0" 
+                                oninput="calculateLPGTotal(${entryCounter})">
+                            <small class="text-muted">e.g., 3300 for 45kg</small>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small">Cylinder Weight (kg)</label>
+                            <input type="number" id="lpg_weight_${entryCounter}" 
+                                name="cylinder_weight_${entryCounter}"
+                                class="form-control form-control-sm" step="0.01" min="0.01" value="0"
+                                oninput="calculateLPGTotal(${entryCounter})">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small">Total Cylinders *</label>
+                            <input type="number" id="lpg_qty_${entryCounter}" 
+                                name="cylinder_qty_${entryCounter}"
+                                class="form-control form-control-sm qty-input" step="1" min="1" value="1" 
+                                oninput="calculateLPGTotal(${entryCounter})">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-success">Total KG (Auto)</label>
+                            <input type="text" id="lpg_total_kg_${entryCounter}" class="form-control form-control-sm bg-light" readonly value="0.00">
+                            <small class="text-muted">Cylinders × Weight</small>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-12 row g-2">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small">Rate per KG (Auto)</label>
+                            <input type="text" id="lpg_rate_per_kg_${entryCounter}" class="form-control form-control-sm" readonly value="0.00">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-primary">Rate per Cylinder (Auto)</label>
+                            <input type="text" id="lpg_rate_per_cyl_${entryCounter}" class="form-control form-control-sm bg-light" readonly value="0.00">
+                            <small class="text-muted">Per cylinder price</small>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-danger">Tax per Cylinder (PKR)</label>
+                            <input type="text" id="lpg_tax_per_cyl_${entryCounter}" class="form-control form-control-sm bg-light" readonly value="0.00">
+                            <small class="text-muted">Tax per cylinder</small>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-info">Total with Tax (PKR)</label>
+                            <input type="text" id="lpg_total_with_tax_${entryCounter}" class="form-control form-control-sm bg-light" readonly value="0.00">
+                            <small class="text-muted">All cylinders with tax</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TYPE 5: STANDARD PRODUCTS -->
+                <div id="standard_fields_${entryCounter}" class="col-md-12 row g-2" style="display: none;">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small">Quantity *</label>
+                        <input type="number" id="std_qty_${entryCounter}" name="quantity_${entryCounter}" 
+                            class="form-control form-control-sm qty-input" step="0.01" min="0.01" value="0" 
+                            oninput="calculateStandardTotal(${entryCounter})">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small">Rate (PKR)</label>
+                        <input type="number" id="std_rate_${entryCounter}" name="unit_price_${entryCounter}" 
+                            class="form-control form-control-sm price-input" step="0.01" min="0" value="0" 
+                            oninput="calculateStandardTotal(${entryCounter})">
+                    </div>
+                </div>
+            </div>
+
+            <!-- SHARED FIELDS - ALL WITH name ATTRIBUTES -->
+            <div class="row g-2 mb-2">
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small" id="taxable_qty_label_${entryCounter}">Taxable Qty (kg)</label>
+                    <input type="number" id="taxable_qty_${entryCounter}" 
+                        name="taxable_qty_${entryCounter}"
+                        class="form-control form-control-sm taxable-qty" 
+                        step="0.01" min="0" value="0" 
+                        data-user-changed="false"
+                        oninput="onTaxableQtyChange(${entryCounter}, this)"
+                        onchange="handleCalculation(${entryCounter})">
+                    <small class="text-muted">Leave 0 if fully non-taxable</small>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small">Delivery Charges</label>
+                    <input type="number" name="delivery_charges_${entryCounter}" id="delivery_charges_${entryCounter}" 
+                        class="form-control form-control-sm delivery-charges" step="0.01" min="0" value="0" 
+                        oninput="handleCalculation(${entryCounter})">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small">Extra Charges</label>
+                    <input type="number" name="extra_charges_${entryCounter}" id="extra_charges_${entryCounter}" 
+                        class="form-control form-control-sm extra-charges" step="0.01" min="0" value="0" 
+                        oninput="handleCalculation(${entryCounter})">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small">Tax Type</label>
+                    <select name="tax_type_${entryCounter}" id="tax_type_${entryCounter}" class="form-select form-select-sm tax-type" onchange="toggleTaxFields(${entryCounter})">
+                        <option value="none">Without Tax</option>
+                        <option value="with_tax">With Tax</option>
+                    </select>
+                </div>
+                <div class="col-md-2" id="tax_rate_container_${entryCounter}" style="display:none;">
+                    <label class="form-label fw-bold small">Tax Rate (%)</label>
+                    <input type="number" name="sales_tax_rate_${entryCounter}" id="sales_tax_rate_${entryCounter}" 
+                        class="form-control form-control-sm sales-tax-rate" step="0.01" min="0" value="17" 
+                        oninput="onTaxRateChange(${entryCounter})">
+                </div>
+                <div class="col-md-2" style="display:none;">
+                    <label class="form-label fw-bold small">Subtotal</label>
+                    <input type="text" id="subtotal_${entryCounter}" class="form-control form-control-sm" readonly value="0.00">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small">Sales Tax</label>
+                    <input type="text" id="sales_tax_amount_${entryCounter}" class="form-control form-control-sm text-danger" readonly value="0.00">
+                </div>
+            </div>
+
+            <div class="row g-2 mb-2">
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small">Total Amount</label>
+                    <input type="text" id="total_amount_${entryCounter}" class="form-control form-control-sm fw-bold text-primary" readonly value="0.00">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small">Paid Amount</label>
+                    <input type="number" name="paid_amount_${entryCounter}" id="paid_amount_${entryCounter}" 
+                        class="form-control form-control-sm paid-amount" step="0.01" min="0" value="0" 
+                        oninput="handleCalculation(${entryCounter})">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small">Balance (Auto)</label>
+                    <input type="text" id="balance_${entryCounter}" class="form-control form-control-sm" readonly value="0.00">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small">Payment Type</label>
+                    <select name="payment_type_${entryCounter}" id="payment_type_${entryCounter}" class="form-select form-select-sm">
+                        <option value="cash">Cash</option>
+                        <option value="transfer">Bank Transfer</option>
+                        <option value="cheque">Cheque</option>
+                        <option value="online">Online</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Description</label>
+                    <input type="text" name="description_${entryCounter}" id="description_${entryCounter}" class="form-control form-control-sm" placeholder="e.g. LPG purchase">
+                </div>
+            </div>
+            
+            <!-- Split Preview -->
+            <div class="row g-2 mt-2" id="split_preview_${entryCounter}">
+                <div class="col-md-12">
+                    <div class="alert alert-info alert-sm py-1 px-2 mb-0">
+                        <small>
+                            <strong>📊 Split Preview:</strong>
+                            <span class="text-danger">Taxable: 0.00</span>
+                            <span class="text-muted">|</span>
+                            <span class="text-success">Non-Taxable: 0.00</span>
+                            <span class="text-muted">|</span>
+                            <span class="text-primary">Total: 0.00</span>
+                        </small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Save Button -->
+            <div class="row mt-2">
+                <div class="col-md-12 text-end">
+                    <button type="button" class="btn btn-primary btn-sm save-entry-btn" onclick="saveSingleEntry(${entryCounter})">
+                        <i class="fas fa-save me-1"></i>Save Entry
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(block);
+
+        var supplierSelect = document.getElementById('supplier_id_' + entryCounter);
+        if (supplierSelect) {
+            supplierSelect.addEventListener('change', function() {
+                loadSupplierHistory(this.value, entryCounter);
+            });
+        }
+        
+        if (scrollToEntry) {
+            setTimeout(function() { block.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
+        }
+        updateEntryCount();
+    }
+
+    function loadSupplierHistory(supplierId, entryId) {
+        var panel = document.getElementById('supplier_history_' + entryId);
+        if (!panel) return;
+        if (!supplierId) {
+            panel.innerHTML = '<span class="text-muted">Select a supplier to view prior purchase/payment history.</span>';
+            return;
+        }
+
+        panel.innerHTML = '<span class="text-muted"><i class="fas fa-spinner fa-spin me-1"></i>Loading supplier history...</span>';
+        fetch('/suppliers/api/supplier-history/?supplier_id=' + encodeURIComponent(supplierId))
+            .then(response => response.json())
+            .then(data => {
+                if (!data || !data.supplier || !data.supplier.name) {
+                    panel.innerHTML = '<span class="text-muted">No supplier history found.</span>';
+                    return;
+                }
+
+                var rows = '';
+                if (!data.records || data.records.length === 0) {
+                    rows = '<div class="text-muted">No purchase/payment activity found for this supplier.</div>';
+                } else {
+                    rows = data.records.slice(0, 5).map(function(record) {
+                        var product = record.product_name || 'Payment Only';
+                        var paid = parseFloat(record.paid_amount || 0).toFixed(2);
+                        var amount = parseFloat(record.amount || 0).toFixed(2);
+                        var label = record.is_payment_only ? 'Payment Only' : product;
+                        return `<div class="border rounded px-2 py-1 mb-1">
+                            <small><strong>${record.date}</strong> | ${label} | Inv: ${record.invoice_no || '—'} | Paid: PKR ${paid} | Total: PKR ${amount}</small>
+                        </div>`;
+                    }).join('');
+                }
+
+                panel.innerHTML = `
+                    <div class="border rounded bg-light p-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong class="text-primary">${data.supplier.name}</strong>
+                            <span class="badge bg-success">${data.summary.records_count || 0} records</span>
+                        </div>
+                        <div class="small text-muted">
+                            Total Paid: PKR ${parseFloat(data.summary.total_paid || 0).toFixed(2)} | Total Purchases: PKR ${parseFloat(data.summary.total_amount || 0).toFixed(2)}
+                        </div>
+                        <div class="mt-2">${rows}</div>
+                    </div>
+                `;
+            })
+            .catch(function() {
+                panel.innerHTML = '<span class="text-danger">Unable to load supplier history.</span>';
+            });
+    }
+
+    function calculateKgTotal(id) {
+        var qty = parseFloat(document.getElementById('kg_qty_' + id).value) || 0;
+        var rate = parseFloat(document.getElementById('kg_rate_' + id).value) || 0;
+        var productName = document.getElementById('product_id_' + id).options[document.getElementById('product_id_' + id).selectedIndex].text.toLowerCase();
+        
+        var m3 = 0;
+        var productType = '';
+        
+        if (isOxygenProduct(productName)) {
+            m3 = qty * 0.7384;
+            productType = 'Oxygen';
+        } else if (isNitrogenProduct(productName)) {
+            m3 = qty * 0.844;
+            productType = 'Nitrogen/N2';
+        } else if (productName.includes('co2') && !isLPGProduct(productName)) {
+            m3 = 0;
+            productType = 'CO2';
+        }
+        
+        document.getElementById('kg_m3_' + id).value = m3.toFixed(4);
+        
+        var rateWithoutTax = 0;
+        
+        if (productType === 'Oxygen' || productType === 'Nitrogen/N2') {
+            var taxType = document.getElementById('tax_type_' + id).value;
+            var taxRate = parseFloat(document.getElementById('sales_tax_rate_' + id).value) || 0;
+            var taxMultiplier = taxRate > 0 ? (1 + taxRate / 100) : 1.18;
+            rateWithoutTax = taxType === 'with_tax' ? rate / taxMultiplier : rate;
+            document.getElementById('kg_rate_without_tax_' + id).value = rateWithoutTax.toFixed(2);
+        } else {
+            rateWithoutTax = rate;
+            document.getElementById('kg_rate_without_tax_' + id).value = '0.00';
+        }
+        
+        var totalWithoutTax = 0;
+        if (productType === 'Oxygen' || productType === 'Nitrogen/N2') {
+            totalWithoutTax = rateWithoutTax * m3;
+        } else {
+            totalWithoutTax = qty * rate;
+        }
+        document.getElementById('kg_total_without_tax_' + id).value = totalWithoutTax.toFixed(2);
+        
+        var subtotal = 0;
+        if (productType === 'Oxygen' || productType === 'Nitrogen/N2') {
+            subtotal = m3 * rateWithoutTax;
+        } else {
+            subtotal = qty * rate;
+        }
+        document.getElementById('subtotal_' + id).value = subtotal.toFixed(2);
+        
+        calculateTaxAndTotal(id);
+    }
+
+    // ============================================================
+    // 2. ARGON / SPECIAL ARGON / GAS MIX / DA / DRY AIR (M³ based)
+    // ============================================================
+    function calculateArgonTotal(id) {
+        var totalM3 = parseFloat(document.getElementById('argon_total_m3_' + id).value) || 0;
+        var qty = parseInt(document.getElementById('argon_qty_' + id).value) || 0;
+        var rate = parseFloat(document.getElementById('argon_rate_' + id).value) || 0;
+        
+        var taxType = document.getElementById('tax_type_' + id).value;
+        var taxRate = parseFloat(document.getElementById('sales_tax_rate_' + id).value) || 0;
+        
+        var m3PerCyl = (qty > 0) ? (totalM3 / qty) : 0;
+        document.getElementById('argon_m3_per_cyl_' + id).value = m3PerCyl.toFixed(4);
+        
+        var subtotal = totalM3 * rate;
+        document.getElementById('subtotal_' + id).value = subtotal.toFixed(2);
+        
+        var taxableQty = parseFloat(document.getElementById('taxable_qty_' + id).value) || 0;
+        
+        if (taxableQty > totalM3) {
+            taxableQty = totalM3;
+            document.getElementById('taxable_qty_' + id).value = taxableQty;
+            showToast('⚠️ Taxable quantity cannot exceed total M³', 'warning');
+        }
+        
+        var taxAmount = 0;
+        var rateWithTax = 0;
+        var taxPerM3 = 0;
+        
+        if (taxType === 'with_tax' && taxRate > 0 && taxableQty > 0) {
+            var taxableSubtotal = taxableQty * rate;
+            taxAmount = taxableSubtotal * (taxRate / 100);
+            document.getElementById('sales_tax_amount_' + id).value = taxAmount.toFixed(2);
+            
+            taxPerM3 = rate * (taxRate / 100);
+            document.getElementById('argon_tax_per_m3_' + id).value = taxPerM3.toFixed(2);
+            
+            rateWithTax = rate + taxPerM3;
+            document.getElementById('argon_rate_with_tax_' + id).value = rateWithTax.toFixed(2);
+            document.getElementById('argon_rate_with_tax_' + id).style.color = '#198754';
+        } else {
+            document.getElementById('sales_tax_amount_' + id).value = '0.00';
+            document.getElementById('argon_tax_per_m3_' + id).value = '0.00';
+            document.getElementById('argon_rate_with_tax_' + id).value = '0.00';
+            document.getElementById('argon_rate_with_tax_' + id).style.color = '#6c757d';
+        }
+        
+        var ratePerCyl = m3PerCyl * (rateWithTax || rate);
+        document.getElementById('argon_rate_per_cyl_' + id).value = ratePerCyl.toFixed(2);
+        
+        var totalRate = ratePerCyl * qty;
+        document.getElementById('argon_total_rate_' + id).value = totalRate.toFixed(2);
+        
+        calculateTotalWithTax(id);
+    }
+
+    function calculateTotalWithTax(id) {
+        var subtotal = parseFloat(document.getElementById('subtotal_' + id).value) || 0;
+        var taxAmount = parseFloat(document.getElementById('sales_tax_amount_' + id).value) || 0;
+        var delivery = parseFloat(document.getElementById('delivery_charges_' + id).value) || 0;
+        var extra = parseFloat(document.getElementById('extra_charges_' + id).value) || 0;
+        var paid = parseFloat(document.getElementById('paid_amount_' + id).value) || 0;
+        
+        var total = subtotal + taxAmount + delivery + extra;
+        var balance = total - paid;
+        
+        document.getElementById('total_amount_' + id).value = total.toFixed(2);
+        document.getElementById('balance_' + id).value = balance.toFixed(2);
+    }
+
+    function onTaxableQtyChange(id, input) {
+        input.dataset.userChanged = 'true';
+        
+        var productSelect = document.getElementById('product_id_' + id);
+        var productName = productSelect ? productSelect.options[productSelect.selectedIndex].text.toLowerCase() : '';
+        var isOxygen = isOxygenProduct(productName);
+        var isNitrogen = isNitrogenProduct(productName);
+        var isArgon = isArgonProduct(productName);
+        
+        var totalQty = getQuantityFromVisibleField(id);
+        var taxableQty = parseFloat(input.value) || 0;
+        
+        if (isArgon) {
+            var argonTotalM3 = parseFloat(document.getElementById('argon_total_m3_' + id).value) || 0;
+            totalQty = argonTotalM3;
+        }
+        
+        if (taxableQty > totalQty && totalQty > 0) {
+            taxableQty = totalQty;
+            input.value = taxableQty;
+            showToast('⚠️ Taxable quantity cannot exceed total quantity', 'warning');
+        }
+        
+        var nonTaxableQty = totalQty - taxableQty;
+        updateSplitPreview(id, taxableQty, nonTaxableQty);
+        handleCalculation(id);
+    }
+
+    function updateSplitPreview(id, taxableQty, nonTaxableQty) {
+        var previewElement = document.getElementById('split_preview_' + id);
+        if (!previewElement) return;
+        
+        var productSelect = document.getElementById('product_id_' + id);
+        var productName = productSelect ? productSelect.options[productSelect.selectedIndex].text.toLowerCase() : '';
+        var isArgon = isArgonProduct(productName);
+        var isLPG = isLPGProduct(productName);
+        var isOxygen = isOxygenProduct(productName);
+        var isNitrogen = isNitrogenProduct(productName);
+        
+        var unit = (isArgon || isOxygen || isNitrogen) ? 'M³' : 'kg';
+        
+        var extraInfo = '';
+        if (isLPG) {
+            var lpgQty = document.getElementById('lpg_qty_' + id);
+            var lpgWeight = document.getElementById('lpg_weight_' + id);
+            if (lpgQty && lpgWeight) {
+                extraInfo = ` <span class="badge bg-secondary">${lpgQty.value || 0} cylinders × ${lpgWeight.value || 0}kg</span>`;
+            }
+        }
+        
+        previewElement.innerHTML = `
+            <div class="col-md-12">
+                <div class="alert alert-info alert-sm py-1 px-2 mb-0">
+                    <small>
+                        <strong>📊 Split Preview:</strong>
+                        <span class="text-danger">Taxable: ${taxableQty.toFixed(2)} ${unit}</span>
+                        <span class="text-muted">|</span>
+                        <span class="text-success">Non-Taxable: ${nonTaxableQty.toFixed(2)} ${unit}</span>
+                        <span class="text-muted">|</span>
+                        <span class="text-primary">Total: ${(taxableQty + nonTaxableQty).toFixed(2)} ${unit}</span>
+                        ${extraInfo}
+                    </small>
+                </div>
+            </div>
+        `;
+    }
+
+    function calculateLPGTotal(id) {
+        var totalRate = parseFloat(document.getElementById('lpg_rate_cyl_' + id).value) || 0;
+        var weight = parseFloat(document.getElementById('lpg_weight_' + id).value) || 0;
+        var qty = parseInt(document.getElementById('lpg_qty_' + id).value) || 0;
+        var taxType = document.getElementById('tax_type_' + id).value;
+        var taxRate = parseFloat(document.getElementById('sales_tax_rate_' + id).value) || 0;
+        
+        var totalKg = qty * weight;
+        document.getElementById('lpg_total_kg_' + id).value = totalKg.toFixed(2);
+        
+        if (totalRate > 0 && weight > 0 && qty > 0) {
+            var perKgRate = totalRate / 11.80;
+            document.getElementById('lpg_rate_per_kg_' + id).value = perKgRate.toFixed(2);
+            
+            var oneCylinderPrice = perKgRate * weight;
+            document.getElementById('lpg_rate_per_cyl_' + id).value = oneCylinderPrice.toFixed(2);
+            
+            var taxPerCyl = 0;
+            var taxableQty = parseFloat(document.getElementById('taxable_qty_' + id).value) || 0;
+            var taxableAmount = taxableQty * perKgRate;
+            var subtotalRate = taxType === 'with_tax' && taxRate > 0
+                ? perKgRate / (1 + taxRate / 100)
+                : perKgRate;
+            var subtotal = subtotalRate * totalKg;
+            var totalWithTax = subtotal;
+            
+            document.getElementById('lpg_tax_per_cyl_' + id).value = '0.00';
+
+            if (taxType === 'with_tax' && taxRate > 0) {
+                var taxableNetAmount = taxableQty * subtotalRate;
+                totalWithTax = subtotal + (taxableNetAmount * (taxRate / 100));
+            }
+            
+            document.getElementById('lpg_total_with_tax_' + id).value = totalWithTax.toFixed(2);
+            document.getElementById('subtotal_' + id).value = subtotal.toFixed(2);
+        } else {
+            document.getElementById('lpg_rate_per_kg_' + id).value = '0.00';
+            document.getElementById('lpg_rate_per_cyl_' + id).value = '0.00';
+            document.getElementById('lpg_tax_per_cyl_' + id).value = '0.00';
+            document.getElementById('lpg_total_with_tax_' + id).value = '0.00';
+            document.getElementById('subtotal_' + id).value = '0.00';
+        }
+        calculateTaxAndTotal(id);
+    }
+
+    function calculateStandardTotal(id) {
+        var qty = parseFloat(document.getElementById('std_qty_' + id).value) || 0;
+        var rate = parseFloat(document.getElementById('std_rate_' + id).value) || 0;
+        
+        var subtotal = qty * rate;
+        document.getElementById('subtotal_' + id).value = subtotal.toFixed(2);
+        calculateTaxAndTotal(id);
+    }
+
+    function calculateTaxAndTotal(id) {
+        var totalWithoutTax = parseFloat(document.getElementById('kg_total_without_tax_' + id).value) || 0;
+        var subtotal = parseFloat(document.getElementById('subtotal_' + id).value) || 0;
+        var delivery = parseFloat(document.getElementById('delivery_charges_' + id).value) || 0;
+        var extra = parseFloat(document.getElementById('extra_charges_' + id).value) || 0;
+        var paid = parseFloat(document.getElementById('paid_amount_' + id).value) || 0;
+        var taxType = document.getElementById('tax_type_' + id).value;
+        var taxRate = parseFloat(document.getElementById('sales_tax_rate_' + id).value) || 0;
+        
+        var taxableQty = parseFloat(document.getElementById('taxable_qty_' + id).value) || 0;
+        
+        var productSelect = document.getElementById('product_id_' + id);
+        var productName = productSelect ? productSelect.options[productSelect.selectedIndex].text.toLowerCase() : '';
+        var isOxygen = isOxygenProduct(productName);
+        var isNitrogen = isNitrogenProduct(productName);
+        var isCO2 = productName.includes('co2') && !isLPGProduct(productName);
+        var isArgon = isArgonProduct(productName);
+        var isLPG = isLPGProduct(productName);
+        
+        var taxAmount = 0;
+        var totalAmount = 0;
+
+        if (isLPG) {
+            totalWithoutTax = subtotal;
+        }
+        
+        if (isLPG && taxType === 'with_tax' && taxRate > 0 && taxableQty > 0) {
+            var lpgGrossRate = parseFloat(document.getElementById('lpg_rate_per_kg_' + id).value) || 0;
+            var lpgNetRate = lpgGrossRate / (1 + taxRate / 100);
+            taxAmount = taxableQty * lpgNetRate * (taxRate / 100);
+            totalAmount = totalWithoutTax + taxAmount + delivery + extra;
+        } else if (!isLPG && taxType === 'with_tax' && taxRate > 0 && taxableQty > 0) {
+            
+            var taxableAmount = 0;
+            
+            if (isOxygen || isNitrogen || isArgon) {
+                var rateWithoutTax = parseFloat(document.getElementById('kg_rate_without_tax_' + id).value) || 0;
+                taxableAmount = rateWithoutTax * taxableQty;
+            } else if (isCO2) {
+                var directRate = parseFloat(document.getElementById('kg_rate_' + id).value) || 0;
+                taxableAmount = taxableQty * directRate;
+            } else if (isLPG) {
+                var lpgRate = parseFloat(document.getElementById('lpg_rate_per_kg_' + id).value) || 0;
+                taxableAmount = taxableQty * lpgRate;
+            } else {
+                var totalQty = getQuantityFromVisibleField(id);
+                var ratio = totalQty > 0 ? taxableQty / totalQty : 0;
+                taxableAmount = subtotal * ratio;
+            }
+            
+            taxAmount = taxableAmount * (taxRate / 100);
+            
+            document.getElementById('kg_tax_amount_' + id).value = taxAmount.toFixed(2);
+            document.getElementById('kg_tax_amount_' + id).style.color = '#dc3545';
+            
+            totalAmount = totalWithoutTax + taxAmount + delivery + extra;
+        } else {
+            document.getElementById('sales_tax_amount_' + id).value = '0.00';
+            document.getElementById('kg_tax_amount_' + id).value = '0.00';
+            document.getElementById('kg_tax_amount_' + id).style.color = '#6c757d';
+            document.getElementById('kg_final_total_' + id).value = '0.00';
+            document.getElementById('kg_final_total_' + id).style.color = '#6c757d';
+            document.getElementById('kg_final_total_' + id).placeholder = 'Apply tax to see value';
+            totalAmount = totalWithoutTax + delivery + extra;
+        }
+        
+        document.getElementById('sales_tax_amount_' + id).value = taxAmount.toFixed(2);
+        
+        var balance = totalAmount - paid;
+        
+        document.getElementById('total_amount_' + id).value = totalAmount.toFixed(2);
+        document.getElementById('balance_' + id).value = balance.toFixed(2);
+    }
+
+    function handleCalculation(id) {
+        var productSelect = document.getElementById('product_id_' + id);
+        var productName = productSelect ? productSelect.options[productSelect.selectedIndex].text.toLowerCase() : '';
+        var isArgon = isArgonProduct(productName);
+        var isLPG = isLPGProduct(productName);
+        
+        var taxableQty = parseFloat(document.getElementById('taxable_qty_' + id).value) || 0;
+        var totalQty = getQuantityFromVisibleField(id);
+        
+        if (isArgon) {
+            var argonTotalM3 = parseFloat(document.getElementById('argon_total_m3_' + id).value) || 0;
+            totalQty = argonTotalM3;
+            
+            if (taxableQty > totalQty && totalQty > 0) {
+                taxableQty = totalQty;
+                document.getElementById('taxable_qty_' + id).value = taxableQty;
+                showToast('⚠️ Taxable quantity cannot exceed total M³', 'warning');
+            }
+        } else {
+            if (taxableQty > totalQty && totalQty > 0) {
+                taxableQty = totalQty;
+                document.getElementById('taxable_qty_' + id).value = taxableQty;
+                showToast('⚠️ Taxable quantity cannot exceed total quantity', 'warning');
+            }
+        }
+        
+        var nonTaxableQty = totalQty - taxableQty;
+        updateSplitPreview(id, taxableQty, nonTaxableQty);
+        
+        if (isArgon) {
+            calculateArgonTotal(id);
+        } else if (isLPG) {
+            calculateLPGTotal(id);
+        } else {
+            calculateTaxAndTotal(id);
+        }
+    }
+
+    function toggleTaxFields(id) {
+        var taxType = document.getElementById('tax_type_' + id).value;
+        var taxRateContainer = document.getElementById('tax_rate_container_' + id);
+        var productSelect = document.getElementById('product_id_' + id);
+        var productName = productSelect ? productSelect.options[productSelect.selectedIndex].text.toLowerCase() : '';
+        var isArgon = isArgonProduct(productName);
+        var isLPG = isLPGProduct(productName);
+        
+        if (taxType === 'with_tax') {
+            taxRateContainer.style.display = 'block';
+        } else {
+            taxRateContainer.style.display = 'none';
+        }
+        
+        if (isArgon) {
+            calculateArgonTotal(id);
+        } else if (isLPG) {
+            calculateLPGTotal(id);
+        } else {
+            calculateTaxAndTotal(id);
+        }
+    }
+
+    function onTaxRateChange(id) {
+        var productSelect = document.getElementById('product_id_' + id);
+        var productName = productSelect ? productSelect.options[productSelect.selectedIndex].text.toLowerCase() : '';
+        var isArgon = isArgonProduct(productName);
+        var isLPG = isLPGProduct(productName);
+        var isOxygen = isOxygenProduct(productName);
+        var isNitrogen = isNitrogenProduct(productName);
+        
+        if (isArgon) {
+            calculateArgonTotal(id);
+        } else if (isLPG) {
+            calculateLPGTotal(id);
+        } else if (isOxygen || isNitrogen) {
+            calculateKgTotal(id);
+        } else {
+            calculateTaxAndTotal(id);
+        }
+    }
+
+    function updateProductPrice(select, id) {
+        var price = parseFloat(select.options[select.selectedIndex].getAttribute('data-price')) || 0;
+        var productName = select.options[select.selectedIndex].text.toLowerCase();
+        
+        var productFields = document.getElementById('product_fields_' + id);
+        if (productFields) {
+            var children = productFields.querySelectorAll('div[id$="' + id + '"]');
+            children.forEach(function(el) {
+                el.style.display = 'none';
+            });
+        }
+        
+        var label = document.getElementById('taxable_qty_label_' + id);
+        
+        var isDirectSale = select.options[select.selectedIndex].dataset.isQtyOnly === 'true';
+        
+        if (isDirectSale) {
+            var standardFields = document.getElementById('standard_fields_' + id);
+            if (standardFields) standardFields.style.display = 'flex';
+            document.getElementById('std_rate_' + id).value = price;
+            if (label) label.textContent = 'Taxable Qty (Units)';
+            calculateStandardTotal(id);
+            
+            showToast('🛒 Direct Sale Product - Simple Quantity & Rate Only', 'info');
+            return;
+        }
+        
+        if (isOxygenProduct(productName) || 
+            isNitrogenProduct(productName) || 
+            (productName.includes('co2') && !isLPGProduct(productName))) {
+            
+            var kgFields = document.getElementById('kg_fields_' + id);
+            if (kgFields) kgFields.style.display = 'flex';
+            document.getElementById('kg_rate_' + id).value = price;
+            
+            if (isOxygenProduct(productName) || isNitrogenProduct(productName)) {
+                if (label) label.textContent = 'Taxable Qty (M³)';
+            } else {
+                if (label) label.textContent = 'Taxable Qty (kg)';
+            }
+            calculateKgTotal(id);
+            
+        } else if (isArgonProduct(productName)) {
+            var argonFields = document.getElementById('argon_fields_' + id);
+            if (argonFields) argonFields.style.display = 'flex';
+            document.getElementById('argon_rate_' + id).value = price;
+            if (label) label.textContent = 'Taxable Qty (M³)';
+            calculateArgonTotal(id);
+            
+        } else if (isLPGProduct(productName)) {
+            var lpgFields = document.getElementById('lpg_fields_' + id);
+            if (lpgFields) lpgFields.style.display = 'flex';
+            document.getElementById('lpg_rate_cyl_' + id).value = price;
+            if (label) label.textContent = 'Taxable Qty (kg)';
+            
+            document.getElementById('lpg_weight_' + id).value = 0;
+            
+            var qtyInput = document.getElementById('lpg_qty_' + id);
+            if (qtyInput && (qtyInput.value == 0 || qtyInput.value == '')) {
+                qtyInput.value = 1;
+            }
+            calculateLPGTotal(id);
+            
+        } else {
+            var standardFields = document.getElementById('standard_fields_' + id);
+            if (standardFields) standardFields.style.display = 'flex';
+            document.getElementById('std_rate_' + id).value = price;
+            if (label) label.textContent = 'Taxable Qty (kg)';
+            calculateStandardTotal(id);
+        }
+    }
+
+    function getQuantityFromVisibleField(id) {
+        var qty = 0;
+        
+        var stdQty = document.getElementById('std_qty_' + id);
+        if (stdQty && stdQty.style.display !== 'none') {
+            qty = parseFloat(stdQty.value) || 0;
+            if (qty > 0) return qty;
+        }
+        
+        var kgQty = document.getElementById('kg_qty_' + id);
+        if (kgQty && kgQty.style.display !== 'none') {
+            var kgValue = parseFloat(kgQty.value) || 0;
+            if (kgValue > 0) {
+                var productSelect = document.getElementById('product_id_' + id);
+                var productName = productSelect ? productSelect.options[productSelect.selectedIndex].text.toLowerCase() : '';
+                if (isOxygenProduct(productName)) {
+                    qty = kgValue * 0.7384;
+                } else if (isNitrogenProduct(productName)) {
+                    qty = kgValue * 0.844;
+                } else {
+                    qty = kgValue;
+                }
+                return qty;
+            }
+        }
+        
+        var argonQty = document.getElementById('argon_qty_' + id);
+        if (argonQty && argonQty.style.display !== 'none') {
+            qty = parseInt(argonQty.value) || 0;
+            if (qty > 0) return qty;
+        }
+        
+        var argonTotalM3 = document.getElementById('argon_total_m3_' + id);
+        if (argonTotalM3 && argonTotalM3.style.display !== 'none') {
+            qty = parseFloat(argonTotalM3.value) || 0;
+            if (qty > 0) return qty;
+        }
+        
+        var lpgQty = document.getElementById('lpg_qty_' + id);
+        if (lpgQty && lpgQty.style.display !== 'none') {
+            var weight = parseFloat(document.getElementById('lpg_weight_' + id).value) || 0;
+            var cylinderCount = parseInt(lpgQty.value) || 0;
+            qty = cylinderCount * weight;
+            if (qty > 0) return qty;
+        }
+        
+        return qty;
+    }
+    
+    function getPriceFromVisibleField(id) {
+        var price = 0;
+        
+        var stdRate = document.getElementById('std_rate_' + id);
+        if (stdRate && stdRate.style.display !== 'none') {
+            price = parseFloat(stdRate.value) || 0;
+            if (price > 0) return price;
+        }
+        
+        var kgRate = document.getElementById('kg_rate_' + id);
+        if (kgRate && kgRate.style.display !== 'none') {
+            price = parseFloat(kgRate.value) || 0;
+            if (price > 0) return price;
+        }
+        
+        var argonRate = document.getElementById('argon_rate_' + id);
+        if (argonRate && argonRate.style.display !== 'none') {
+            price = parseFloat(argonRate.value) || 0;
+            if (price > 0) return price;
+        }
+        
+        var lpgRate = document.getElementById('lpg_rate_cyl_' + id);
+        if (lpgRate && lpgRate.style.display !== 'none') {
+            price = parseFloat(lpgRate.value) || 0;
+            if (price > 0) return price;
+        }
+        
+        return price;
+    }
+
+    function collectEntryData(id) {
+        console.log("📦 Collecting data for entry #" + id);
+        
+        var qty = getQuantityFromVisibleField(id);
+        var price = getPriceFromVisibleField(id);
+        
+        var argonTotalM3 = parseFloat(document.getElementById('argon_total_m3_' + id).value) || 0;
+        var argonCylinderQty = parseInt(document.getElementById('argon_qty_' + id).value) || 0;
+        var lpgCylinderQty = parseInt(document.getElementById('lpg_qty_' + id).value) || 0;
+        var lpgWeight = parseFloat(document.getElementById('lpg_weight_' + id).value) || 0;
+        
+        var supplierSelect = document.getElementById('supplier_id_' + id);
+        var productSelect = document.getElementById('product_id_' + id);
+        var productName = productSelect ? productSelect.options[productSelect.selectedIndex].text.toLowerCase() : '';
+        var taxType = document.getElementById('tax_type_' + id).value;
+        var taxRate = parseFloat(document.getElementById('sales_tax_rate_' + id).value) || 0;
+        
+        var isArgon = isArgonProduct(productName);
+        var isLPG = isLPGProduct(productName);
+        var isOxygen = isOxygenProduct(productName);
+        var isNitrogen = isNitrogenProduct(productName);
+        
+        var isDirectSale = productSelect && productSelect.options[productSelect.selectedIndex].dataset.isQtyOnly === 'true';
+        
+        if (isDirectSale) {
+            console.log("🛒 DIRECT SALE PRODUCT DETECTED - Simple entry");
+        }
+        
+        if (isOxygen || isNitrogen) {
+            var kgQty = parseFloat(document.getElementById('kg_qty_' + id).value) || 0;
+            var m3Value = 0;
+            if (isOxygen) {
+                m3Value = kgQty * 0.7384;
+            } else if (isNitrogen) {
+                m3Value = kgQty * 0.844;
+            }
+            qty = kgQty;
+            console.log(`🔵 ${isOxygen ? 'Oxygen' : 'Nitrogen'}: ${kgQty}kg → ${m3Value} M³`);
+        }
+        
+        if (isArgon) {
+            qty = argonTotalM3;
+            price = parseFloat(document.getElementById('argon_rate_' + id).value) || 0;
+            console.log("🔵 ARGON DETECTED: Total M3 =", qty, "Cylinders =", argonCylinderQty);
+        }
+        
+        if (isLPG) {
+            console.log("🔵 LPG DETECTED: Total KG =", qty, "Cylinders =", lpgCylinderQty, "Weight =", lpgWeight, "Total Rate =", price);
+        }
+        
+        var taxableQty = parseFloat(document.getElementById('taxable_qty_' + id).value) || 0;
+        
+        if (isOxygen || isNitrogen) {
+            if (taxableQty > qty) {
+                taxableQty = qty;
+                document.getElementById('taxable_qty_' + id).value = taxableQty;
+                showToast('⚠️ Taxable quantity cannot exceed total M³', 'warning');
+            }
+        } else {
+            if (taxableQty > qty) {
+                taxableQty = qty;
+                document.getElementById('taxable_qty_' + id).value = taxableQty;
+                showToast('⚠️ Taxable quantity cannot exceed total quantity', 'warning');
+            }
+        }
+        
+        var nonTaxableQty = qty - taxableQty;
+        
+        console.log("📊 Tax Calculation for ID:", id);
+        console.log("  Product Type:", isArgon ? "Argon" : isLPG ? "LPG" : "Standard");
+        console.log("  Total Quantity:", qty);
+        console.log("  Taxable Qty (user input):", taxableQty);
+        console.log("  Non-Taxable Qty (auto):", nonTaxableQty);
+        
+        var entryData = {
+            supplier_id: supplierSelect ? supplierSelect.value : '',
+            product_id: productSelect ? productSelect.value : '',
+            quantity: qty,
+            taxable_qty: taxableQty,
+            taxable_qty_m3: taxableQty,
+            unit_price: price,
+            delivery_charges: parseFloat(document.getElementById('delivery_charges_' + id).value) || 0,
+            paid_amount: parseFloat(document.getElementById('paid_amount_' + id).value) || 0,
+            payment_type: document.getElementById('payment_type_' + id).value,
+            invoice_no: document.getElementById('invoice_no_' + id).value || '',
+            description: document.getElementById('description_' + id).value || '',
+            tax_type: taxType,
+            sales_tax_rate: taxRate,
+            total_m3: argonTotalM3,
+            cylinder_qty: isArgon ? argonCylinderQty : (isLPG ? lpgCylinderQty : 0),
+            lpg_qty: lpgCylinderQty,
+            cylinder_weight: lpgWeight,
+            extra_charges: parseFloat(document.getElementById('extra_charges_' + id).value) || 0,
+        };
+        
+        console.log("📦 Sending data:", entryData);
+        return entryData;
+    }
+
+    function saveSingleEntry(id) {
+        console.log("🟢 saveSingleEntry called for ID:", id);
+        
+        var block = document.getElementById('entry-' + id);
+        if (!block) {
+            console.error("❌ Block not found for ID:", id);
+            showToast('❌ Entry block not found', 'error');
+            return;
+        }
+        
+        var entryData = collectEntryData(id);
+        
+        console.log("📤 SENDING DATA TO SERVER:", entryData);
+        
+        if (!entryData.supplier_id) {
+            showToast('❌ Please select a supplier', 'warning');
+            console.error("❌ Supplier ID is missing!");
+            return;
+        }
+        var isPaymentOnly = !entryData.product_id && entryData.paid_amount > 0;
+        if (!entryData.product_id && !isPaymentOnly) {
+            showToast('❌ Select a product or enter a paid amount for a payment-only row', 'warning');
+            console.error("❌ Product ID is missing for a non-payment entry!");
+            return;
+        }
+        if (!isPaymentOnly && entryData.quantity <= 0) {
+            showToast('❌ Quantity must be greater than 0 (Current: ' + entryData.quantity + ')', 'warning');
+            console.error("❌ Quantity is 0 or invalid!", entryData.quantity);
+            return;
+        }
+        if (!isPaymentOnly && entryData.unit_price <= 0) {
+            showToast('❌ Rate/Price must be greater than 0', 'warning');
+            console.error("❌ Price is 0 or invalid!", entryData.unit_price);
+            return;
+        }
+        
+        var saveBtn = block.querySelector('.save-entry-btn');
+        if (!saveBtn) {
+            console.error("❌ Save button not found!");
+            return;
+        }
+        
+        var originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+        saveBtn.disabled = true;
+        
+        fetch('/suppliers/api/save-purchase/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                date: currentDate,
+                data: entryData
+            })
+        })
+        .then(response => response.json())
+        .then(result => {
+            console.log("📥 SERVER RESPONSE:", result);
+            
+            if (result.success) {
+                showToast('✅ Entry saved successfully!', 'success');
+                
+                block.dataset.saved = 'true';
+                block.dataset.entryId = result.entry_id;
+                block.style.backgroundColor = '#f0fff4';
+                block.style.borderLeft = '4px solid #28a745';
+                
+                var badge = document.getElementById('status_badge_' + id);
+                if (badge) {
+                    badge.className = 'badge bg-success ms-2';
+                    badge.innerHTML = '<i class="fas fa-check-circle"></i> Saved';
+                }
+                
+                clearEntryFields(id);
+                
+                setTimeout(function() {
+                    location.reload();
+                }, 800);
+            } else {
+                showToast('❌ Error: ' + (result.error || 'Failed to save'), 'error');
+                console.error("❌ SERVER ERROR:", result.error);
+            }
+        })
+        .catch(error => {
+            showToast('❌ Error saving entry: ' + error.message, 'error');
+            console.error("❌ FETCH ERROR:", error);
+        })
+        .finally(() => {
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+        });
+    }
+
+    function clearEntryFields(id) {
+        var block = document.getElementById('entry-' + id);
+        if (!block) return;
+        
+        block.querySelectorAll('input[type="number"], input[type="text"]').forEach(function(input) {
+            if (input.id && input.id.includes('subtotal_')) return;
+            if (input.id && input.id.includes('sales_tax_amount_')) return;
+            if (input.id && input.id.includes('total_amount_')) return;
+            if (input.id && input.id.includes('balance_')) return;
+            if (input.id && input.id.includes('kg_m3_')) return;
+            if (input.id && input.id.includes('argon_m3_per_cyl_')) return;
+            if (input.id && input.id.includes('lpg_rate_per_kg_')) return;
+            if (input.id && input.id.includes('taxable_qty_')) {
+                input.value = 0;
+                return;
+            }
+            if (input.id && input.id.includes('delivery_charges_')) {
+                input.value = 0;
+                return;
+            }
+            if (input.id && input.id.includes('extra_charges_')) {
+                input.value = 0;
+                return;
+            }
+            if (input.id && input.id.includes('paid_amount_')) {
+                input.value = 0;
+                return;
+            }
+            if (input.id && input.id.includes('sales_tax_rate_')) {
+                input.value = 17;
+                return;
+            }
+            if (input.id && input.id.includes('invoice_no_')) {
+                input.value = '';
+                return;
+            }
+            if (input.id && input.id.includes('description_')) {
+                input.value = '';
+                return;
+            }
+            if (input.id && input.id.includes('lpg_weight_')) {
+                input.value = 11.8;
+                return;
+            }
+            if (input.id && input.id.includes('lpg_qty_')) {
+                input.value = 1;
+                return;
+            }
+            input.value = 0;
+        });
+        
+        block.querySelectorAll('select').forEach(function(select) {
+            select.selectedIndex = 0;
+        });
+        
+        document.getElementById('subtotal_' + id).value = '0.00';
+        document.getElementById('sales_tax_amount_' + id).value = '0.00';
+        document.getElementById('total_amount_' + id).value = '0.00';
+        document.getElementById('balance_' + id).value = '0.00';
+        
+        block.dataset.saved = 'false';
+        block.dataset.entryId = '';
+        block.style.backgroundColor = '#f8f9fa';
+        block.style.borderLeft = '1px solid #dee2e6';
+    }
+
+    function removeEntryBlock(id) {
+        var container = document.getElementById('entriesContainer');
+        if (container.children.length > 1) {
+            var block = document.getElementById('entry-' + id);
+            if (block && block.dataset.saved === 'true') {
+                if (!confirm('This entry is saved. Remove it from the page?')) {
+                    return;
+                }
+            }
+            block.remove();
+            updateEntryCount();
+            showToast('Entry #' + id + ' removed', 'warning');
+        } else {
+            showToast('You must keep at least one entry.', 'warning');
+        }
+    }
+
+    function updateEntryCount() {
+        var count = document.querySelectorAll('.entry-block').length;
+        var countBadge = document.getElementById('entryCount');
+        if (countBadge) {
+            countBadge.textContent = count + ' Entries';
+        }
+    }
+
+    function refreshEntries() {
+        showToast('Refreshing entries...', 'success');
+        document.getElementById('entriesContainer').innerHTML = '';
+        entryCounter = 0;
+        loadExistingEntries();
+    }
+
+    function clearAllEntries() {
+        if (!confirm('Are you sure you want to clear all entries?')) {
+            return;
+        }
+        document.getElementById('entriesContainer').innerHTML = '';
+        entryCounter = 0;
+        for (var i = 0; i < DEFAULT_ENTRIES; i++) {
+            addEntryBlock(false);
+        }
+        updateEntryCount();
+        showToast('All entries cleared!', 'success');
+    }
+
+    function deletePurchase(entryId) {
+        if (!confirm('Are you sure you want to delete this purchase?')) {
+            return;
+        }
+        
+        fetch('/suppliers/api/delete-purchase/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ entry_id: entryId })
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                showToast('Purchase deleted successfully!', 'success');
+                setTimeout(function() {
+                    location.reload();
+                }, 500);
+            } else {
+                showToast('Error: ' + (result.error || 'Failed to delete'), 'error');
+            }
+        })
+        .catch(error => {
+            showToast('Error deleting purchase', 'error');
+        });
+    }
+
+    function openEditModal(entryId) {
+        console.log("🔵 Opening edit modal for purchase:", entryId);
+        
+        document.getElementById('edit_entry_id').value = entryId;
+        
+        fetch(`/suppliers/api/get-purchase-details/?id=${entryId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("📥 Received purchase data:", data);
+                
+                document.getElementById('edit_supplier_id').value = data.supplier_id || '';
+                document.getElementById('edit_product_id').value = data.product_id || '';
+                document.getElementById('edit_quantity').value = data.quantity || 0;
+                document.getElementById('edit_taxable_qty').value = data.taxable_qty || 0;
+                document.getElementById('edit_unit_price').value = data.unit_price || 0;
+                document.getElementById('edit_delivery_charges').value = data.delivery_charges || 0;
+                document.getElementById('edit_paid_amount').value = data.paid_amount || 0;
+                document.getElementById('edit_tax_type').value = data.tax_type || 'none';
+                document.getElementById('edit_sales_tax_rate').value = data.sales_tax_rate || 0;
+                document.getElementById('edit_payment_type').value = data.payment_type || 'cash';
+                document.getElementById('edit_invoice_no').value = data.invoice_no || '';
+                document.getElementById('edit_purchase_date').value = data.purchase_date || currentDate;
+                document.getElementById('edit_description').value = data.description || '';
+                
+                var isArgon = false;
+                var productSelect = document.getElementById('edit_product_id');
+                if (productSelect) {
+                    var productName = productSelect.options[productSelect.selectedIndex]?.text.toLowerCase() || '';
+                    isArgon = isArgonProduct(productName);
+                }
+                
+                var argonFields = document.getElementById('edit_argon_fields');
+                if (argonFields) {
+                    if (isArgon) {
+                        argonFields.style.display = 'block';
+                        document.getElementById('edit_total_m3').value = data.total_m3 || data.quantity || 0;
+                        document.getElementById('edit_cylinder_qty').value = data.cylinder_qty || 0;
+                    } else {
+                        argonFields.style.display = 'none';
+                    }
+                }
+                
+                var qtyUnit = document.getElementById('edit_qty_unit');
+                var taxableUnit = document.getElementById('edit_taxable_unit');
+                if (qtyUnit) {
+                    qtyUnit.textContent = isArgon ? 'M³' : 'kg';
+                }
+                if (taxableUnit) {
+                    taxableUnit.textContent = isArgon ? 'M³' : 'Leave 0 for fully non-taxable';
+                }
+                
+                const modal = new bootstrap.Modal(document.getElementById('editPurchaseModal'));
+                modal.show();
+            })
+            .catch(error => {
+                console.error("❌ Error loading purchase:", error);
+                showToast('Error loading purchase details: ' + error.message, 'error');
+            });
+    }
+
+    function saveEditPurchase() {
+        const entryId = document.getElementById('edit_entry_id').value;
+        
+        if (!entryId) {
+            showToast('No entry selected', 'warning');
+            return;
+        }
+        
+        var isArgon = document.getElementById('edit_argon_fields').style.display !== 'none';
+        
+        const data = {
+            supplier_id: document.getElementById('edit_supplier_id').value,
+            product_id: document.getElementById('edit_product_id').value,
+            quantity: parseFloat(document.getElementById('edit_quantity').value) || 0,
+            taxable_qty: parseFloat(document.getElementById('edit_taxable_qty').value) || 0,
+            unit_price: parseFloat(document.getElementById('edit_unit_price').value) || 0,
+            delivery_charges: parseFloat(document.getElementById('edit_delivery_charges').value) || 0,
+            paid_amount: parseFloat(document.getElementById('edit_paid_amount').value) || 0,
+            payment_type: document.getElementById('edit_payment_type').value,
+            invoice_no: document.getElementById('edit_invoice_no').value || '',
+            purchase_date: document.getElementById('edit_purchase_date').value || currentDate,
+            description: document.getElementById('edit_description').value || '',
+            tax_type: document.getElementById('edit_tax_type').value,
+            sales_tax_rate: parseFloat(document.getElementById('edit_sales_tax_rate').value) || 0,
+            extra_charges: 0,
+        };
+        
+        if (isArgon) {
+            data.total_m3 = parseFloat(document.getElementById('edit_total_m3').value) || 0;
+            data.cylinder_qty = parseInt(document.getElementById('edit_cylinder_qty').value) || 0;
+        }
+        
+        if (!data.supplier_id) {
+            showToast('Please select a supplier', 'warning');
+            return;
+        }
+        if (!data.product_id) {
+            showToast('Please select a product', 'warning');
+            return;
+        }
+        if (data.quantity <= 0) {
+            showToast('Quantity must be greater than 0', 'warning');
+            return;
+        }
+        
+        console.log("📤 Updating purchase:", data);
+        
+        const saveBtn = document.querySelector('#editPurchaseModal .btn-primary');
+        const originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Updating...';
+        saveBtn.disabled = true;
+        
+        fetch('/suppliers/api/update-purchase/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                entry_id: entryId,
+                data: data
+            })
+        })
+        .then(response => response.json())
+        .then(result => {
+            console.log("📥 Update response:", result);
+            
+            if (result.success) {
+                showToast('✅ Purchase updated successfully!', 'success');
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editPurchaseModal'));
+                modal.hide();
+                setTimeout(() => location.reload(), 500);
+            } else {
+                showToast('❌ Error: ' + (result.error || 'Failed to update'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error("❌ Error:", error);
+            showToast('❌ Error updating purchase: ' + error.message, 'error');
+        })
+        .finally(() => {
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("🟢 DOM loaded - Initializing Purchase Entry...");
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        loadExistingEntries();
+    });
+</script>
+
+{% endblock %}
+
+<style>
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        max-width: 400px;
+    }
+    
+    .toast-custom {
+        background: #fff;
+        border-radius: 8px;
+        padding: 12px 18px;
+        margin-bottom: 10px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border-left: 4px solid #28a745;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        animation: slideIn 0.3s ease;
+    }
+    
+    .toast-custom.error {
+        border-left-color: #dc3545;
+    }
+    
+    .toast-custom.warning {
+        border-left-color: #ffc107;
+    }
+    
+    .toast-close {
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+        color: #999;
+        padding: 0 0 0 10px;
+    }
+    
+    .toast-close:hover {
+        color: #333;
+    }
+    
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0%); opacity: 1; }
+    }
+    
+    .entry-block {
+        background-color: #f8f9fa !important;
+        border: 1px solid #dee2e6 !important;
+        border-radius: 8px !important;
+        padding: 1.25rem !important;
+        margin-bottom: 1.25rem !important;
+        transition: all 0.3s ease;
+    }
+    
+    .entry-block:last-child {
+        margin-bottom: 0 !important;
+    }
+    
+    .entries-scroll-wrapper {
+        max-height: 60vh;
+        overflow-y: auto;
+        padding: 15px 15px 10px 15px;
+        position: relative;
+    }
+    
+    .entries-scroll-wrapper::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    .entries-scroll-wrapper::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    .entries-scroll-wrapper::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+    }
+    
+    .entries-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+    
+    .sticky-header {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: #0d6efd !important;
+    }
+    
+    .sticky-footer {
+        position: sticky;
+        bottom: 0;
+        z-index: 100;
+        background: #f8f9fa !important;
+        border-top: 2px solid #dee2e6;
+    }
+    
+    .card-body {
+        padding: 0 !important;
+    }
+    
+    .form-control-sm, .form-select-sm {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.6rem;
+        height: calc(2rem + 2px);
+        border-radius: 4px;
+    }
+    
+    #edit_argon_fields {
+        padding-top: 10px;
+        border-top: 1px dashed #dee2e6;
+        margin-top: 10px;
+    }
+    
+    /* LPG fields styling */
+    #lpg_fields_${entryCounter} .row {
+        margin-bottom: 8px;
+    }
+    #lpg_fields_${entryCounter} .bg-light {
+        background-color: #f8f9fa !important;
+    }
+    #lpg_fields_${entryCounter} .text-success {
+        color: #198754 !important;
+    }
+    #lpg_fields_${entryCounter} .text-primary {
+        color: #0d6efd !important;
+    }
+    #lpg_fields_${entryCounter} .text-danger {
+        color: #dc3545 !important;
+    }
+    #lpg_fields_${entryCounter} .text-info {
+        color: #0dcaf0 !important;
+    }
+
+</style>

@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}FBR Product Mapping - GBMS{% endblock %}
+{% block page_title %}📋 FBR Product Mapping{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">
+            <i class="fas fa-link me-2"></i>FBR Product Mapping
+            <small class="text-light float-end">Map internal products to FBR item names</small>
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="post" class="row g-3">
+            {% csrf_token %}
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Product</label>
+                <select name="product_id" class="form-select" required>
+                    <option value="">-- Select Product --</option>
+                    {% for product in products %}
+                    <option value="{{ product.pk }}">{{ product.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold">FBR Item Name</label>
+                <input type="text" name="fbr_item_name" class="form-control" placeholder="e.g. OXYGEN LIQUID" required>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Unit</label>
+                <select name="unit" class="form-select">
+                    <option value="KG">KG</option>
+                    <option value="M3">M3</option>
+                    <option value="LTR">LTR</option>
+                    <option value="NOS">NOS</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">GST Rate (%)</label>
+                <input type="number" name="gst_rate" class="form-control" value="18" step="0.01" min="0">
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="submit" class="btn btn-success w-100">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Existing Mappings -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-list me-2"></i>Current Mappings</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered">
+                <thead class="table-light">
+                    <tr>
+                        <th>Product</th>
+                        <th>FBR Item Name</th>
+                        <th>Unit</th>
+                        <th>GST Rate</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for mapping in mappings %}
+                    <tr>
+                        <td><strong>{{ mapping.product.name }}</strong></td>
+                        <td>{{ mapping.fbr_item_name }}</td>
+                        <td>{{ mapping.unit }}</td>
+                        <td>{{ mapping.gst_rate }}%</td>
+                        <td>
+                            {% if mapping.is_active %}
+                            <span class="badge bg-success">Active</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-3">
+                            No mappings found. Add mappings above.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

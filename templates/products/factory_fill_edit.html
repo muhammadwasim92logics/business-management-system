@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Factory Fill - GBMS{% endblock %}
+{% block page_title %}Edit Factory Fill{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header"><i class="fas fa-edit me-2"></i>Update Factory Fill</div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+            {% endif %}
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label" for="id_factory">Factory</label>
+                    {{ form.factory }}
+                    {{ form.factory.errors }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="id_product">Product</label>
+                    {{ form.product }}
+                    {{ form.product.errors }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="id_transaction_date">Date</label>
+                    {{ form.transaction_date }}
+                    {{ form.transaction_date.errors }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="id_empty_sent">Empty cylinders sent</label>
+                    {{ form.empty_sent }}
+                    {{ form.empty_sent.errors }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="id_full_received">Full cylinders received</label>
+                    {{ form.full_received }}
+                    {{ form.full_received.errors }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="id_invoice_number">Invoice number</label>
+                    {{ form.invoice_number }}
+                    {{ form.invoice_number.errors }}
+                </div>
+                <div class="col-12">
+                    <label class="form-label" for="id_notes">Notes</label>
+                    {{ form.notes }}
+                    {{ form.notes.errors }}
+                </div>
+            </div>
+            <div class="mt-4">
+                <button class="btn btn-primary" type="submit"><i class="fas fa-save me-2"></i>Save Changes</button>
+                <a class="btn btn-outline-secondary" href="{% url 'products:factory_detail' object.factory_id %}">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

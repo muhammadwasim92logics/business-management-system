@@ -1,0 +1,945 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Today's Earning Details{% endblock %}
+
+{% block extra_css %}
+<style>
+    .expense-field {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        border: 1px solid #e9ecef;
+        transition: all 0.3s ease;
+    }
+    .expense-field:hover {
+        background: #f1f3f5;
+        border-color: #dee2e6;
+    }
+    .toast-message {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 15px 25px;
+        border-radius: 8px;
+        color: white;
+        z-index: 9999;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        animation: slideInRight 0.5s ease;
+        font-weight: 500;
+    }
+    @keyframes slideInRight {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    .card-header .badge {
+        font-size: 0.8rem;
+        padding: 0.35rem 0.65rem;
+    }
+    .table tbody tr:hover {
+        background-color: rgba(0,0,0,0.02);
+    }
+    .border-left-success {
+        border-left: 4px solid #28a745 !important;
+    }
+    .border-left-danger {
+        border-left: 4px solid #dc3545 !important;
+    }
+    .border-left-warning {
+        border-left: 4px solid #ffc107 !important;
+    }
+    .border-left-info {
+        border-left: 4px solid #17a2b8 !important;
+    }
+</style>
+{% endblock %}
+
+{% block page_title %}Today's Earning Details{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Date Range Filter -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-filter me-2"></i>Filter by Date Range
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form id="dateFilterForm" class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Start Date</label>
+                            <input type="date" id="startDate" class="form-control" value="{{ today }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">End Date</label>
+                            <input type="date" id="endDate" class="form-control" value="{{ today }}">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-primary w-100" onclick="fetchData()">
+                                <i class="fas fa-search me-1"></i> View
+                            </button>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-secondary w-100" onclick="setToday()">
+                                <i class="fas fa-calendar-day me-1"></i> Today
+                            </button>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-info w-100" onclick="setThisMonth()">
+                                <i class="fas fa-calendar-alt me-1"></i> This Month
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Opening Cash -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow border-left-info">
+                <div class="card-body">
+                    <form id="openingBalanceForm" class="row g-3 align-items-end">
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold">Opening Cash on Hand</label>
+                            <input type="number" id="openingBalanceAmount" class="form-control" min="0" step="0.01" placeholder="e.g. 50000">
+                            <small class="text-muted">Money available before your first entries.</small>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Starting Date</label>
+                            <input type="date" id="openingBalanceDate" class="form-control" value="{{ today }}">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-info w-100">
+                                <i class="fas fa-wallet me-1"></i> Save Opening Cash
+                            </button>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-outline-danger w-100" onclick="deleteOpeningBalance()">
+                                <i class="fas fa-trash me-1"></i> Remove
+                            </button>
+                        </div>
+                    </form>
+                    <div id="openingBalanceStatus" class="small text-muted mt-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Partner Bank Account Balances -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow border-left-info">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-info">
+                        <i class="fas fa-building-columns me-2"></i>Partner Bank Account Balances
+                    </h6>
+                    <span class="small text-muted">Save a dated snapshot for every account</span>
+                </div>
+                <div class="card-body">
+                    <div id="partnerAccountFields"></div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="button" class="btn btn-outline-info" onclick="addPartnerAccountField()">
+                            <i class="fas fa-plus me-1"></i>Add One More Account
+                        </button>
+                        <button type="button" class="btn btn-info" onclick="savePartnerAccounts()">
+                            <i class="fas fa-save me-1"></i>Save Account Details
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="clearPartnerAccountFields()">
+                            <i class="fas fa-eraser me-1"></i>Clear
+                        </button>
+                    </div>
+                    <div id="partnerAccountStatus" class="small text-muted mt-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-info"><i class="fas fa-clock-rotate-left me-2"></i>Partner Account History</h6>
+                    <span class="small text-muted">Use the date filter above to compare days</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light"><tr><th>Date</th><th>Partner</th><th>Bank / Account</th><th class="text-end">Amount</th><th>Description</th><th class="text-center">Action</th></tr></thead>
+                            <tbody id="partnerAccountTableBody"><tr><td colspan="6" class="text-center text-muted py-3">No account snapshots added</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                <i class="fas fa-arrow-down me-1"></i> Total Income (Received)
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalIncome">PKR 0.00</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-hand-holding-usd fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                <i class="fas fa-arrow-up me-1"></i> Total Purchases (Paid)
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalPurchases">PKR 0.00</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-shopping-cart fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                <i class="fas fa-wallet me-1"></i> Total Expenses
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalExpenses">PKR 0.00</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-coins fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                <i class="fas fa-cash-register me-1"></i> Net Cash Today
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="netCash">PKR 0.00</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-money-bill-wave fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Tables -->
+    <div class="row">
+        <!-- Income Section -->
+        <div class="col-lg-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center bg-success bg-opacity-10">
+                    <h6 class="m-0 font-weight-bold text-success">
+                        <i class="fas fa-arrow-down me-2"></i>Income Received
+                    </h6>
+                    <span class="badge bg-success" id="incomeCount">0</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Customer</th>
+                                    <th class="text-end">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody id="incomeTableBody">
+                                <tr>
+                                    <td colspan="2" class="text-center text-muted py-3">
+                                        <i class="fas fa-inbox me-1"></i> No data available
+                                    </td>
+                                </tr>
+                            </tbody>
+                            <tfoot class="table-success">
+                                <tr>
+                                    <th class="fw-bold">Total</th>
+                                    <th class="text-end fw-bold" id="incomeTotal">PKR 0.00</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Purchases Section -->
+        <div class="col-lg-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center bg-danger bg-opacity-10">
+                    <h6 class="m-0 font-weight-bold text-danger">
+                        <i class="fas fa-arrow-up me-2"></i>Purchases Paid
+                    </h6>
+                    <span class="badge bg-danger" id="purchaseCount">0</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Supplier</th>
+                                    <th class="text-end">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody id="purchaseTableBody">
+                                <tr>
+                                    <td colspan="2" class="text-center text-muted py-3">
+                                        <i class="fas fa-inbox me-1"></i> No data available
+                                    </td>
+                                </tr>
+                            </tbody>
+                            <tfoot class="table-danger">
+                                <tr>
+                                    <th class="fw-bold">Total</th>
+                                    <th class="text-end fw-bold" id="purchaseTotal">PKR 0.00</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Expenses Section -->
+        <div class="col-lg-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center bg-warning bg-opacity-10">
+                    <h6 class="m-0 font-weight-bold text-warning">
+                        <i class="fas fa-wallet me-2"></i>Expenses
+                    </h6>
+                    <span class="badge bg-warning" id="expenseCount">0</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Description</th>
+                                    <th class="text-end">Amount</th>
+                                    <th class="text-center" style="width: 50px;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="expenseTableBody">
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-3">
+                                        <i class="fas fa-inbox me-1"></i> No expenses added
+                                    </td>
+                                </tr>
+                            </tbody>
+                            <tfoot class="table-warning">
+                                <tr>
+                                    <th class="fw-bold">Total</th>
+                                    <th class="text-end fw-bold" id="expenseTotal">PKR 0.00</th>
+                                    <th></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Expenses Section -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3 bg-primary bg-opacity-10">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-plus-circle me-2"></i>Add Expenses
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form id="expenseForm">
+                        <div id="expenseFieldsContainer">
+                            <!-- Default 4 expense fields will be added by JS -->
+                        </div>
+                        
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <button type="button" class="btn btn-secondary" onclick="addExpenseField()">
+                                    <i class="fas fa-plus me-1"></i> Add One More
+                                </button>
+                                <button type="button" class="btn btn-success ms-2" onclick="saveAllExpenses()">
+                                    <i class="fas fa-save me-1"></i> Save All Expenses
+                                </button>
+                                <button type="button" class="btn btn-danger ms-2" onclick="clearAllFields()">
+                                    <i class="fas fa-eraser me-1"></i> Clear All
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let expenseFieldCount = 0;
+    let partnerAccountFieldCount = 0;
+    let editingPartnerAccountId = null;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add 4 default expense fields
+        for (let i = 0; i < 4; i++) {
+            addExpenseField();
+        }
+        addPartnerAccountField();
+        // Fetch data for today
+        fetchData();
+        document.getElementById('openingBalanceForm').addEventListener('submit', saveOpeningBalance);
+    });
+
+    function addPartnerAccountField() {
+        partnerAccountFieldCount++;
+        const id = partnerAccountFieldCount;
+        const field = document.createElement('div');
+        field.className = 'row g-2 mb-2 expense-field partner-account-field';
+        field.id = `partnerAccountField_${id}`;
+        field.innerHTML = `
+            <div class="col-md-3"><input type="text" class="form-control" data-partner-field="partner" placeholder="Partner name (e.g. Partner A)"></div>
+            <div class="col-md-3"><input type="text" class="form-control" data-partner-field="bank" placeholder="Bank / account name"></div>
+            <div class="col-md-2"><input type="number" class="form-control" data-partner-field="amount" min="0" step="0.01" placeholder="Amount"></div>
+            <div class="col-md-2"><input type="text" class="form-control" data-partner-field="description" placeholder="Description"></div>
+            <div class="col-md-2"><button type="button" class="btn btn-outline-danger w-100" onclick="this.closest('.partner-account-field').remove()"><i class="fas fa-times me-1"></i>Remove</button></div>`;
+        document.getElementById('partnerAccountFields').appendChild(field);
+    }
+
+    function clearPartnerAccountFields() {
+        editingPartnerAccountId = null;
+        document.getElementById('partnerAccountFields').innerHTML = '';
+        addPartnerAccountField();
+        document.getElementById('partnerAccountStatus').textContent = '';
+    }
+
+    function savePartnerAccounts() {
+        const fields = Array.from(document.querySelectorAll('.partner-account-field'));
+        const date = document.getElementById('startDate').value;
+        const rows = fields.map(field => ({
+            field,
+            partner: field.querySelector('[data-partner-field="partner"]').value.trim(),
+            bank: field.querySelector('[data-partner-field="bank"]').value.trim(),
+            amount: field.querySelector('[data-partner-field="amount"]').value.trim(),
+            description: field.querySelector('[data-partner-field="description"]').value.trim()
+        })).filter(row => row.partner || row.bank || row.amount || row.description);
+
+        if (!date || !rows.length) {
+            showToast('Add at least one account and select a date', 'warning');
+            return;
+        }
+        if (rows.some(row => !row.partner || !row.bank || row.amount === '' || parseFloat(row.amount) < 0)) {
+            showToast('Enter a partner, bank, and valid non-negative amount', 'warning');
+            return;
+        }
+
+        const requests = rows.map(row => {
+            const endpoint = editingPartnerAccountId
+                ? `/earnings/api/partner-account/update/${editingPartnerAccountId}/`
+                : '/earnings/api/partner-account/add/';
+            const body = `partner_name=${encodeURIComponent(row.partner)}&bank_name=${encodeURIComponent(row.bank)}&amount=${encodeURIComponent(row.amount)}&description=${encodeURIComponent(row.description)}&date=${encodeURIComponent(date)}`;
+            return fetch(endpoint, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': getCsrfToken()}, body}).then(response => response.json());
+        });
+        Promise.all(requests).then(results => {
+            const failed = results.find(result => !result.success);
+            if (failed) {
+                showToast(failed.error || 'Could not save account details', 'error');
+                return;
+            }
+            editingPartnerAccountId = null;
+            clearPartnerAccountFields();
+            fetchData();
+            showToast('Partner account details saved', 'success');
+        }).catch(() => showToast('Could not save account details', 'error'));
+    }
+
+    function editPartnerAccount(accountId) {
+        const account = window.partnerAccountData.find(item => item.id === accountId);
+        if (!account) return;
+        editingPartnerAccountId = accountId;
+        document.getElementById('partnerAccountFields').innerHTML = '';
+        addPartnerAccountField();
+        const field = document.querySelector('.partner-account-field');
+        field.querySelector('[data-partner-field="partner"]').value = account.partner_name;
+        field.querySelector('[data-partner-field="bank"]').value = account.bank_name;
+        field.querySelector('[data-partner-field="amount"]').value = account.amount;
+        field.querySelector('[data-partner-field="description"]').value = account.description;
+        document.getElementById('startDate').value = account.date;
+        document.getElementById('partnerAccountStatus').textContent = 'Editing a saved snapshot. Save to update it.';
+        document.getElementById('partnerAccountFields').scrollIntoView({behavior: 'smooth', block: 'center'});
+    }
+
+    function deletePartnerAccount(accountId) {
+        if (!confirm('Delete this account snapshot?')) return;
+        fetch(`/earnings/api/partner-account/delete/${accountId}/`, {method: 'POST', headers: {'X-CSRFToken': getCsrfToken()}})
+            .then(response => response.json()).then(data => { if (data.success) { fetchData(); showToast('Account snapshot deleted', 'success'); } else showToast(data.error || 'Could not delete snapshot', 'error'); })
+            .catch(() => showToast('Could not delete snapshot', 'error'));
+    }
+
+    function saveOpeningBalance(event) {
+        event.preventDefault();
+        const amount = document.getElementById('openingBalanceAmount').value.trim();
+        const date = document.getElementById('openingBalanceDate').value;
+        if (!amount || parseFloat(amount) < 0 || !date) {
+            showToast('Please enter a valid opening amount and date', 'warning');
+            return;
+        }
+
+        fetch('/earnings/api/opening-balance/save/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: `amount=${encodeURIComponent(amount)}&date=${encodeURIComponent(date)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                fetchData();
+                showToast('Opening cash saved successfully!', 'success');
+            } else {
+                showToast(data.error || 'Error saving opening cash', 'error');
+            }
+        })
+        .catch(() => showToast('Error saving opening cash', 'error'));
+    }
+
+    function deleteOpeningBalance() {
+        if (!confirm('Remove the opening cash balance?')) {
+            return;
+        }
+        fetch('/earnings/api/opening-balance/delete/', {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCsrfToken()}
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('openingBalanceAmount').value = '';
+                fetchData();
+                showToast('Opening cash removed', 'success');
+            } else {
+                showToast(data.error || 'Error removing opening cash', 'error');
+            }
+        })
+        .catch(() => showToast('Error removing opening cash', 'error'));
+    }
+
+    function addExpenseField() {
+        expenseFieldCount++;
+        const container = document.getElementById('expenseFieldsContainer');
+        const fieldDiv = document.createElement('div');
+        fieldDiv.className = 'row g-2 mb-2 expense-field';
+        fieldDiv.id = `expenseField_${expenseFieldCount}`;
+        fieldDiv.innerHTML = `
+            <div class="col-md-5">
+                <input type="text" class="form-control form-control-sm" 
+                       id="expenseDesc_${expenseFieldCount}" 
+                       placeholder="Description (e.g., Worker salary, Electricity bill)" 
+                       data-field-id="${expenseFieldCount}">
+            </div>
+            <div class="col-md-4">
+                <input type="number" class="form-control form-control-sm" 
+                       id="expenseAmount_${expenseFieldCount}" 
+                       placeholder="Amount" 
+                       step="0.01" min="0"
+                       data-field-id="${expenseFieldCount}">
+            </div>
+            <div class="col-md-3">
+                <button type="button" class="btn btn-success btn-sm save-expense-btn w-100" 
+                        onclick="saveSingleExpense(${expenseFieldCount})">
+                    <i class="fas fa-check me-1"></i> Save
+                </button>
+            </div>
+        `;
+        container.appendChild(fieldDiv);
+        
+        // Auto-focus on the new description field
+        document.getElementById(`expenseDesc_${expenseFieldCount}`).focus();
+    }
+
+    function clearAllFields() {
+        if (!confirm('Are you sure you want to clear all expense fields?')) {
+            return;
+        }
+        document.querySelectorAll('#expenseFieldsContainer input').forEach(input => {
+            input.value = '';
+        });
+        showToast('All fields cleared', 'info');
+    }
+
+    function saveSingleExpense(fieldId) {
+        const description = document.getElementById(`expenseDesc_${fieldId}`).value.trim();
+        const amount = document.getElementById(`expenseAmount_${fieldId}`).value.trim();
+        
+        if (!description) {
+            showToast('Please enter a description', 'warning');
+            document.getElementById(`expenseDesc_${fieldId}`).focus();
+            return;
+        }
+        
+        if (!amount || parseFloat(amount) <= 0) {
+            showToast('Please enter a valid amount', 'warning');
+            document.getElementById(`expenseAmount_${fieldId}`).focus();
+            return;
+        }
+        
+        const date = document.getElementById('startDate').value;
+        
+        // Disable button temporarily to prevent double submission
+        const btn = document.querySelector(`#expenseField_${fieldId} .save-expense-btn`);
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+        
+        fetch('/earnings/api/expense/add/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: `description=${encodeURIComponent(description)}&amount=${encodeURIComponent(amount)}&date=${encodeURIComponent(date)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check me-1"></i> Save';
+            
+            if (data.success) {
+                // Clear the fields
+                document.getElementById(`expenseDesc_${fieldId}`).value = '';
+                document.getElementById(`expenseAmount_${fieldId}`).value = '';
+                // Refresh data
+                fetchData();
+                showToast('Expense saved successfully!', 'success');
+            } else {
+                showToast(data.error || 'Error saving expense', 'error');
+            }
+        })
+        .catch(error => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check me-1"></i> Save';
+            console.error('Error:', error);
+            showToast('Error saving expense', 'error');
+        });
+    }
+
+    function saveAllExpenses() {
+        const expenses = [];
+        const fields = document.querySelectorAll('#expenseFieldsContainer .expense-field');
+        
+        fields.forEach(field => {
+            const descInput = field.querySelector('input[type="text"]');
+            const amountInput = field.querySelector('input[type="number"]');
+            
+            const description = descInput ? descInput.value.trim() : '';
+            const amount = amountInput ? amountInput.value.trim() : '';
+            
+            if (description && amount && parseFloat(amount) > 0) {
+                expenses.push({
+                    description: description,
+                    amount: amount
+                });
+            }
+        });
+        
+        if (expenses.length === 0) {
+            showToast('Please add at least one expense to save', 'warning');
+            return;
+        }
+        
+        const date = document.getElementById('startDate').value;
+        
+        // Disable save all button
+        const btn = document.querySelector('button[onclick="saveAllExpenses()"]');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+        
+        fetch('/earnings/api/expense/add-bulk/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: `expenses[]=${encodeURIComponent(JSON.stringify(expenses))}&date=${encodeURIComponent(date)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i> Save All Expenses';
+            
+            if (data.success) {
+                // Clear all fields
+                document.querySelectorAll('#expenseFieldsContainer input').forEach(input => {
+                    input.value = '';
+                });
+                // Refresh data
+                fetchData();
+                showToast(`${data.count} expense(s) saved successfully! Total: PKR ${parseFloat(data.total).toFixed(2)}`, 'success');
+            } else {
+                showToast(data.error || 'Error saving expenses', 'error');
+            }
+        })
+        .catch(error => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i> Save All Expenses';
+            console.error('Error:', error);
+            showToast('Error saving expenses', 'error');
+        });
+    }
+
+    function deleteExpense(expenseId) {
+        if (!confirm('Are you sure you want to delete this expense?')) {
+            return;
+        }
+        
+        fetch(`/earnings/api/expense/delete/${expenseId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                fetchData();
+                showToast('Expense deleted successfully!', 'success');
+            } else {
+                showToast('Error deleting expense', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error deleting expense', 'error');
+        });
+    }
+
+    function fetchData() {
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        
+        if (!startDate || !endDate) {
+            showToast('Please select both start and end dates', 'warning');
+            return;
+        }
+        
+        // Show loading state on cards
+        document.querySelectorAll('.h5.font-weight-bold').forEach(el => {
+            el.textContent = 'Loading...';
+        });
+        
+        fetch(`/earnings/api/details/?start_date=${startDate}&end_date=${endDate}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateUI(data);
+            } else {
+                showToast('Error fetching data: ' + data.error, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error fetching data', 'error');
+        });
+    }
+
+    function updateUI(data) {
+        window.partnerAccountData = data.partner_accounts || [];
+        const partnerAccountBody = document.getElementById('partnerAccountTableBody');
+        if (window.partnerAccountData.length > 0) {
+            partnerAccountBody.innerHTML = window.partnerAccountData.map(account => `
+                <tr>
+                    <td>${account.date}</td>
+                    <td>${escapeHtml(account.partner_name)}</td>
+                    <td>${escapeHtml(account.bank_name)}</td>
+                    <td class="text-end">PKR ${parseFloat(account.amount).toFixed(2)}</td>
+                    <td>${escapeHtml(account.description || '')}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="editPartnerAccount(${account.id})" title="Edit snapshot"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deletePartnerAccount(${account.id})" title="Delete snapshot"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>`).join('');
+        } else {
+            partnerAccountBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">No account snapshots added</td></tr>';
+        }
+
+        const openingBalance = data.opening_balance;
+        document.getElementById('openingBalanceAmount').value = openingBalance.id ? openingBalance.amount : '';
+        if (openingBalance.id) {
+            document.getElementById('openingBalanceDate').value = openingBalance.date;
+            document.getElementById('openingBalanceStatus').textContent = `Opening cash included: PKR ${parseFloat(openingBalance.amount).toFixed(2)}`;
+        } else {
+            document.getElementById('openingBalanceStatus').textContent = 'No opening cash has been added yet.';
+        }
+
+        // Update Income
+        document.getElementById('totalIncome').textContent = `PKR ${parseFloat(data.income.total).toFixed(2)}`;
+        document.getElementById('incomeTotal').textContent = `PKR ${parseFloat(data.income.total).toFixed(2)}`;
+        document.getElementById('incomeCount').textContent = data.income.count;
+        
+        const incomeBody = document.getElementById('incomeTableBody');
+        if (data.income.data.length > 0) {
+            incomeBody.innerHTML = data.income.data.map(item => `
+                <tr>
+                    <td>${item.customer_name}</td>
+                    <td class="text-end">PKR ${parseFloat(item.amount).toFixed(2)}</td>
+                </tr>
+            `).join('');
+        } else {
+            incomeBody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3"><i class="fas fa-inbox me-1"></i> No income received</td></tr>';
+        }
+        
+        // Update Purchases
+        document.getElementById('totalPurchases').textContent = `PKR ${parseFloat(data.purchases.total).toFixed(2)}`;
+        document.getElementById('purchaseTotal').textContent = `PKR ${parseFloat(data.purchases.total).toFixed(2)}`;
+        document.getElementById('purchaseCount').textContent = data.purchases.count;
+        
+        const purchaseBody = document.getElementById('purchaseTableBody');
+        if (data.purchases.data.length > 0) {
+            purchaseBody.innerHTML = data.purchases.data.map(item => `
+                <tr>
+                    <td>${item.supplier_name}</td>
+                    <td class="text-end">PKR ${parseFloat(item.amount).toFixed(2)}</td>
+                </tr>
+            `).join('');
+        } else {
+            purchaseBody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3"><i class="fas fa-inbox me-1"></i> No purchases made</td></tr>';
+        }
+        
+        // Update Expenses
+        document.getElementById('totalExpenses').textContent = `PKR ${parseFloat(data.expenses.total).toFixed(2)}`;
+        document.getElementById('expenseTotal').textContent = `PKR ${parseFloat(data.expenses.total).toFixed(2)}`;
+        document.getElementById('expenseCount').textContent = data.expenses.count;
+        
+        const expenseBody = document.getElementById('expenseTableBody');
+        if (data.expenses.data.length > 0) {
+            expenseBody.innerHTML = data.expenses.data.map(item => `
+                <tr>
+                    <td>${item.description}</td>
+                    <td class="text-end">PKR ${parseFloat(item.amount).toFixed(2)}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-danger" onclick="deleteExpense(${item.id})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        } else {
+            expenseBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3"><i class="fas fa-inbox me-1"></i> No expenses added</td></tr>';
+        }
+        
+        // Update Net Cash
+        const netCashValue = parseFloat(data.net_cash);
+        const netCashElement = document.getElementById('netCash');
+        netCashElement.textContent = `PKR ${netCashValue.toFixed(2)}`;
+        
+        if (netCashValue >= 0) {
+            netCashElement.className = 'h5 mb-0 font-weight-bold text-success';
+        } else {
+            netCashElement.className = 'h5 mb-0 font-weight-bold text-danger';
+        }
+    }
+
+    function escapeHtml(value) {
+        return String(value).replace(/[&<>'"]/g, character => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+        }[character]));
+    }
+
+    function setToday() {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('startDate').value = today;
+        document.getElementById('endDate').value = today;
+        fetchData();
+    }
+
+    function setThisMonth() {
+        const now = new Date();
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+        document.getElementById('startDate').value = firstDay;
+        document.getElementById('endDate').value = lastDay;
+        fetchData();
+    }
+
+    function getCsrfToken() {
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [name, value] = cookie.trim().split('=');
+            if (name === 'csrftoken') {
+                return value;
+            }
+        }
+        return '';
+    }
+
+    function showToast(message, type = 'info') {
+        const colors = {
+            success: '#28a745',
+            error: '#dc3545',
+            warning: '#ffc107',
+            info: '#17a2b8'
+        };
+        
+        const toast = document.createElement('div');
+        toast.className = 'toast-message';
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: ${colors[type] || colors.info};
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            z-index: 9999;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            animation: slideInRight 0.5s ease;
+            font-weight: 500;
+            max-width: 400px;
+        `;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.5s ease';
+            setTimeout(() => toast.remove(), 500);
+        }, 3000);
+    }
+</script>
+{% endblock %}

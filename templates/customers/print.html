@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Print Customers - GBMS{% endblock %}
+{% block page_title %}Printable Customer List{% endblock %}
+{% block extra_css %}
+<style>
+    .print-summary { background: var(--primary-900); color: #fff; border-radius: 10px; padding: 1rem 1.25rem; }
+    .print-summary h2 { color: #fff; font-size: 1.25rem; margin: 0; }
+    .print-summary p { color: rgba(255,255,255,.75); margin: .25rem 0 0; }
+    .print-table th { background: var(--primary-50); color: var(--primary-900); white-space: nowrap; }
+    .print-table td, .print-table th { padding: .55rem .65rem; font-size: .82rem; }
+    .print-actions { display: flex; gap: .5rem; }
+    @media print {
+        .sidebar, .global-back-button, .print-actions, .main-content > .d-flex:first-child, .btn-toolbar { display: none !important; }
+        .main-content { padding: 0 !important; }
+        .print-summary { color: #000; background: transparent; border: 1px solid #999; }
+        .print-summary h2, .print-summary p { color: #000; }
+        .print-table { width: 100%; }
+        .print-table td, .print-table th { font-size: 9pt; }
+    }
+</style>
+{% endblock %}
+{% block content %}
+<div class="print-actions justify-content-end mb-3">
+    <button type="button" class="btn btn-primary" onclick="window.print()"><i class="fas fa-print me-2"></i>Print now</button>
+    <a href="{% url 'customers:list' %}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-2"></i>Back to customers</a>
+</div>
+<div class="print-summary mb-3">
+    <h2>Customer list</h2>
+    <p>{{ printed_pages }} &middot; {{ total_customers }} customer{{ total_customers|pluralize }}</p>
+</div>
+<div class="table-responsive">
+    <table class="table table-bordered print-table">
+        <thead><tr><th>Code</th><th>Name</th><th>Mobile</th><th>Area</th><th>Last activity</th><th>Status</th><th>Cylinders</th><th class="text-end">Balance</th></tr></thead>
+        <tbody>
+        {% for customer in customers %}
+            <tr>
+                <td>{{ customer.customer_code }}</td><td>{{ customer.name }}</td><td>{{ customer.mobile|default:'-' }}</td><td>{{ customer.area|default:'-' }}</td><td>{{ customer.last_activity_date|default:'No activity' }}</td><td>{{ customer.get_status_display }}</td>
+                <td>{% for product_name, quantity in customer.cylinder_balance.items %}{{ product_name }}: {{ quantity }}{% if not forloop.last %}; {% endif %}{% empty %}-{% endfor %}</td>
+                <td class="text-end">PKR {{ customer.get_outstanding_balance|floatformat:2 }}</td>
+            </tr>
+        {% empty %}<tr><td colspan="8" class="text-center">No customers found.</td></tr>{% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

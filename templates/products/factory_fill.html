@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block title %}Factory Fill - GBMS{% endblock %}
+{% block page_title %}Factory Fill{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <p class="text-muted mb-0">Send empty cylinders for filling and record the full cylinders received.</p>
+    </div>
+    <a href="{% url 'products:list' %}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-2"></i>Products</a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header bg-dark text-white"><i class="fas fa-industry me-2"></i>Record Factory Fill</div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="record_fill">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="factory">Factory</label>
+                            <select class="form-select" id="factory" name="factory" required>
+                                <option value="">Select factory</option>
+                                {% for factory in factories %}<option value="{{ factory.pk }}">{{ factory.name }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="transaction_date">Date</label>
+                            <input class="form-control" id="transaction_date" name="transaction_date" type="date" value="{% now 'Y-m-d' %}" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="product">Product</label>
+                            <select class="form-select" id="product" name="product" required>
+                                <option value="">Select product</option>
+                                {% for product in products %}<option value="{{ product.pk }}">{{ product.name }}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div id="stockNotice" class="alert alert-info mt-3 d-none" role="status"></div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="empty_sent">Empty cylinders sent</label>
+                            <input class="form-control" id="empty_sent" name="empty_sent" type="number" min="0" value="0">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="full_received">Full cylinders received</label>
+                            <input class="form-control" id="full_received" name="full_received" type="number" min="0" value="0" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="invoice_number">Invoice number</label>
+                            <input class="form-control" id="invoice_number" name="invoice_number" type="text" maxlength="50">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="notes">Notes</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="2" placeholder="Optional batch or delivery reference"></textarea>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary mt-4" type="submit"><i class="fas fa-save me-2"></i>Save Factory Fill</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center"><span><i class="fas fa-industry me-2"></i>Factories</span><button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#newFactory"><i class="fas fa-plus"></i></button></div>
+            <div class="collapse" id="newFactory">
+                <form method="post" class="card-body border-bottom">
+                    {% csrf_token %}<input type="hidden" name="action" value="create_factory">
+                    <label class="form-label" for="factory_name">Factory name</label>
+                    <div class="input-group"><input class="form-control" id="factory_name" name="factory_name" required><button class="btn btn-success" type="submit">Add</button></div>
+                </form>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for factory in factories %}
+                <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" href="{% url 'products:factory_detail' factory.pk %}">{{ factory.name }}<i class="fas fa-chevron-right text-muted"></i></a>
+                {% empty %}<div class="card-body text-muted">Add your first factory to begin.</div>{% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const productSelect = document.getElementById('product');
+const stockNotice = document.getElementById('stockNotice');
+let noticeTimer;
+productSelect.addEventListener('change', function () {
+    clearTimeout(noticeTimer);
+    stockNotice.classList.add('d-none');
+    if (!this.value) return;
+    fetch('{% url "products:factory_product_stock" %}?product=' + encodeURIComponent(this.value))
+        .then(response => response.json())
+        .then(data => {
+            stockNotice.innerHTML = '<strong>' + data.name + '</strong>: ' + data.empty_stock_quantity + ' empty and ' + data.stock_quantity + ' full cylinders currently in stock.';
+            stockNotice.classList.remove('d-none');
+            noticeTimer = setTimeout(() => stockNotice.classList.add('d-none'), 30000);
+        });
+});
+</script>
+{% endblock %}

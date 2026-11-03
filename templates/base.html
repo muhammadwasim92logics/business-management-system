@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}GBMS - Gas Business Management{% endblock %}</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Searchable customer and product dropdowns -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    {% load static %}
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <style>
+        .global-back-button {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1050;
+        }
+
+        .money-display {
+            cursor: pointer;
+            text-decoration: underline dotted;
+            text-underline-offset: 0.15rem;
+            display: inline-block;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: visible;
+            text-overflow: clip;
+            max-width: none;
+            position: relative;
+            z-index: 1;
+        }
+
+        .money-display:hover,
+        .money-display:focus-visible {
+            text-decoration: underline;
+            outline: none;
+        }
+
+        .choices {
+            margin-bottom: 0;
+        }
+
+        .choices__list--dropdown,
+        .choices__list[aria-expanded] {
+            z-index: 1060;
+            max-height: min(360px, calc(100vh - 32px));
+        }
+
+        .choices__list--dropdown .choices__list,
+        .choices__list[aria-expanded] .choices__list {
+            max-height: 520px;
+            overflow-y: auto;
+        }
+
+        .choices__list--dropdown,
+        .choices__list[aria-expanded] {
+            min-width: min(360px, calc(100vw - 2rem));
+        }
+
+        .choices.is-flipped .choices__list--dropdown,
+        .choices.is-flipped .choices__list[aria-expanded],
+        .choices__list--dropdown.is-flipped,
+        .choices__list[aria-expanded].is-flipped {
+            top: 100%;
+            bottom: auto;
+        }
+
+        .choices__list--dropdown > .choices__list,
+        .choices__list[aria-expanded] > .choices__list {
+            height: auto;
+            max-height: inherit;
+            overflow-y: auto;
+        }
+
+        .choices__list--dropdown .choices__item--choice,
+        .choices__list[aria-expanded] .choices__item--choice {
+            min-height: 38px;
+            padding: 0.55rem 0.8rem;
+            white-space: normal;
+        }
+
+        .choices__list--dropdown .choices__input,
+        .choices__list[aria-expanded] .choices__input {
+            min-height: 42px;
+            font-size: 0.95rem;
+        }
+    </style>
+    
+    <!-- ============================================================
+    FAVICON - Use the custom app icon for browser tabs
+    ============================================================ -->
+    <link rel="icon" type="image/svg+xml" href="{% static 'img/favicon.svg' %}">
+    <link rel="shortcut icon" type="image/x-icon" href="{% static 'img/favicon.ico' %}">
+    <link rel="apple-touch-icon" href="{% static 'img/favicon.png' %}">
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% if user.is_authenticated %}
+    <button type="button" class="btn btn-dark btn-sm global-back-button" onclick="goBack()" title="Go back to the previous page">
+        <i class="fas fa-arrow-left me-1"></i>Back
+    </button>
+    <div class="container-fluid p-0">
+        <div class="row g-0">
+            <!-- ============================================================
+            SIDEBAR
+            ============================================================ -->
+            <nav class="col-md-3 col-lg-2 d-md-block sidebar" id="sidebar">
+                <div class="brand">
+                    <i class="fas fa-fire me-2"></i>GBMS
+                </div>
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <!-- Dashboard -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.app_name == 'dashboard' %}active{% endif %}" 
+                               href="{% url 'dashboard:index' %}">
+                                <i class="fas fa-chart-pie me-2"></i>Dashboard
+                            </a>
+                        </li>
+                        
+                        <!-- Customers -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.app_name == 'customers' and 'ledger' not in request.path %}active{% endif %}" 
+                               href="{% url 'customers:list' %}">
+                                <i class="fas fa-users me-2"></i>Customers
+                            </a>
+                        </li>
+                        
+                        <!-- Products -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.app_name == 'products' %}active{% endif %}" 
+                               href="{% url 'products:list' %}">
+                                <i class="fas fa-boxes me-2"></i>Products
+                            </a>
+                        </li>
+
+                        <!-- Stock Details -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'stock-details' in request.path %}active{% endif %}"
+                               href="{% url 'products:stock_details' %}">
+                                <i class="fas fa-chart-line me-2"></i>Stock Details
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'stock-overview' in request.path %}active{% endif %}"
+                               href="{% url 'products:stock_overview' %}">
+                                <i class="fas fa-boxes-stacked me-2"></i>All Stock
+                            </a>
+                        </li>
+                        <!-- In your sidebar navigation -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'earnings:dashboard' %}">
+                                <i class="fas fa-chart-line"></i>
+                                <span>View Today Earning Details</span>
+                            </a>
+                        </li>
+                        
+                        <!-- Deliveries with Dropdown -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.app_name == 'deliveries' %}active{% endif %}" 
+                               data-bs-toggle="collapse" href="#deliveriesMenu" role="button" aria-expanded="false">
+                                <i class="fas fa-truck me-2"></i>Deliveries
+                                <i class="fas fa-chevron-down float-end mt-1"></i>
+                            </a>
+                            <div class="collapse {% if request.resolver_match.app_name == 'deliveries' %}show{% endif %}" id="deliveriesMenu">
+                                <ul class="nav flex-column ps-3">
+                                    <li class="nav-item">
+                                        <a class="nav-link {% if 'list' in request.path %}active{% endif %}" 
+                                           href="{% url 'deliveries:list' %}" style="font-size: 0.9rem; padding: 0.4rem 1.5rem;">
+                                            <i class="fas fa-list me-2"></i>All Deliveries
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </li>
+                        
+                        <!-- Daily Entry with Dropdown -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'daily' in request.path %}active{% endif %}" 
+                               data-bs-toggle="collapse" href="#dailyEntryMenu" role="button" aria-expanded="false">
+                                <i class="fas fa-calendar-day me-2"></i>Daily Entry
+                                <i class="fas fa-chevron-down float-end mt-1"></i>
+                            </a>
+                            <div class="collapse {% if 'daily' in request.path %}show{% endif %}" id="dailyEntryMenu">
+                                <ul class="nav flex-column ps-3">
+                                    <li class="nav-item">
+                                        <a class="nav-link {% if 'daily' in request.path and 'payment' not in request.path %}active{% endif %}" 
+                                           href="{% url 'deliveries:daily_entry' %}" style="font-size: 0.9rem; padding: 0.4rem 1.5rem;">
+                                            <i class="fas fa-plus-circle me-2"></i>Add / View Entries
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link {% if 'payment' in request.path %}active{% endif %}" 
+                                           href="{% url 'deliveries:payment_only' %}" style="font-size: 0.9rem; padding: 0.4rem 1.5rem;">
+                                            <i class="fas fa-hand-holding-usd me-2"></i>Payment Only
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </li>
+                        
+                        <!-- Ledger -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'ledger' in request.path %}active{% endif %}" 
+                               href="{% url 'customers:ledger' %}">
+                                <i class="fas fa-book me-2"></i>Ledger
+                            </a>
+                        </li>
+                        
+                        {% comment %} FBR LEGER {% endcomment %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'fbr:ledger' %}">
+                                <i class="fas fa-file-invoice me-1"></i>FBR Ledger
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'fbr:invoices' %}">
+                                <i class="fas fa-receipt me-1"></i>FBR Invoices
+                            </a>
+                        </li>
+
+                        <!-- Payments -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.app_name == 'payments' %}active{% endif %}" 
+                               href="{% url 'payments:list' %}">
+                                <i class="fas fa-coins me-2"></i>Payments
+                            </a>
+                        </li>
+                        
+                        <!-- Cylinders -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.app_name == 'cylinders' %}active{% endif %}" 
+                               href="{% url 'cylinders:dashboard' %}">
+                                <i class="fas fa-gas-pump me-2"></i>Cylinders
+                            </a>
+                        </li>
+
+                        <!-- In base.html, under Purchases dropdown -->
+                        <li class="nav-item">
+                            <a class="nav-link" data-bs-toggle="collapse" href="#purchasesMenu" role="button" aria-expanded="false">
+                                <i class="fas fa-shopping-cart me-2"></i>Purchases
+                            </a>
+                            <div class="collapse" id="purchasesMenu">
+                                <ul class="nav flex-column ms-3">
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{% url 'suppliers:purchase_entry' %}">
+                                            <i class="fas fa-plus-circle me-2"></i>Purchase Entry
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{% url 'suppliers:list' %}">
+                                            <i class="fas fa-truck me-2"></i>Suppliers
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{% url 'suppliers:ledger' %}">
+                                            <i class="fas fa-book me-2"></i>Supplier Ledger
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </li>
+                        <!-- Notifications -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.app_name == 'notifications' %}active{% endif %}" 
+                               href="{% url 'notifications:list' %}">
+                                <i class="fas fa-bell me-2"></i>
+                                Notifications
+                                <span id="notification-badge" class="badge bg-danger ms-2" style="display: none;">0</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'notifications:settings' %}">
+                                <i class="fas fa-sliders-h me-2"></i>Notification Settings
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <button type="button" class="btn btn-sm btn-primary w-100 d-grid backup-choice-trigger">
+                                <span><i class="fas fa-database me-2"></i>Backup Now</span>
+                            </button>
+                        </li>
+
+                        <!-- Divider -->
+                        <li class="nav-item">
+                            <hr class="my-3 border-secondary opacity-25">
+                        </li>
+                        
+                        <!-- Logout -->
+                        <li class="nav-item">
+                            <a class="nav-link text-danger" href="{% url 'accounts:logout' %}">
+                                <i class="fas fa-sign-out-alt me-2"></i>Logout
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- ============================================================
+            MAIN CONTENT
+            ============================================================ -->
+            <main class="col-md-9 col-lg-10 ms-sm-auto px-md-4 main-content">
+                <!-- Header -->
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2 page-title">
+                        {% block page_title %}Dashboard{% endblock %}
+                    </h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <div class="btn-group me-3 print-page-btn" role="group">
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="printCurrentPage()" title="Print the current view">
+                                <i class="fas fa-print me-1"></i>Print
+                            </button>
+                            {% if print_all_url %}
+                            <button type="button" class="btn btn-outline-primary btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" title="More print options">
+                                <span class="visually-hidden">More print options</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><button type="button" class="dropdown-item" onclick="printCurrentPage()"><i class="fas fa-file me-2"></i>Current view</button></li>
+                                <li><a class="dropdown-item" href="{{ print_all_url }}"><i class="fas fa-files me-2"></i>All matching records</a></li>
+                            </ul>
+                            {% endif %}
+                        </div>
+                        <span class="me-2 user-info">
+                            <i class="fas fa-user-circle me-1"></i>
+                            {{ user.get_full_name|default:user.username }}
+                        </span>
+                        <span class="badge {% if user.is_superuser %}bg-success{% else %}bg-info{% endif %}">
+                            {{ user.is_superuser|yesno:"Admin,Staff" }}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Messages -->
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert {% if 'customer-toast' in message.tags %}{% if 'success' in message.tags %}alert-success{% else %}alert-danger{% endif %} customer-toast{% elif 'error' in message.tags %}alert-danger{% else %}alert-{{ message.tags }}{% endif %} alert-dismissible fade show message-alert{% if 'daily-entry-error' in message.tags %} daily-entry-error-message{% endif %}{% if 'backup-result' in message.tags %} d-none backup-feedback-message{% endif %}" role="alert"{% if 'backup-result' in message.tags %} data-backup-feedback="{{ message }}" data-backup-status="{% if 'success' in message.tags %}success{% else %}error{% endif %}"{% endif %}>
+                            <i class="fas fa-{% if 'success' in message.tags %}check-circle{% elif 'error' in message.tags %}exclamation-circle{% elif 'warning' in message.tags %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+
+                <!-- Content Block -->
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+    {% else %}
+        <!-- Auth pages (no sidebar) -->
+        {% block auth_content %}{% endblock %}
+    {% endif %}
+
+    <!-- ============================================================
+    SCRIPTS
+    ============================================================ -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+    <script src="{% static 'js/app.js' %}"></script>
+
+    <script>
+        function goBack() {
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.location.href = '{% url "dashboard:index" %}';
+            }
+        }
+
+        function printCurrentPage() {
+            window.print();
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.bootstrap && window.bootstrap.Popover) {
+                document.querySelectorAll('.money-display').forEach(function (element) {
+                    if (!element.dataset.popoverBound) {
+                        new window.bootstrap.Popover(element, {
+                            html: false,
+                            trigger: 'hover focus click',
+                            placement: 'top',
+                            container: 'body'
+                        });
+                        element.dataset.popoverBound = 'true';
+                    }
+                });
+            }
+        });
+    </script>
+
+    <!-- Add an inline search box to every customer/product select, including dynamic rows. -->
+    <script>
+        (function () {
+            function isSearchableSelect(select) {
+                const identifier = ((select.name || '') + ' ' + (select.id || '') + ' ' + select.className).toLowerCase();
+                const isSupplierLedgerFilter = window.location.pathname === '/suppliers/ledger/' && (
+                    select.name === 'supplier' || select.name === 'product'
+                );
+                if (isSupplierLedgerFilter) {
+                    return false;
+                }
+                return identifier.includes('customer') || identifier.includes('product');
+            }
+
+            function enhanceSearchableSelect(select) {
+                if (!window.Choices || select.choices || select.dataset.searchEnhanced === 'true' || select.dataset.noChoices === 'true' || !isSearchableSelect(select)) {
+                    return;
+                }
+
+                select.dataset.searchEnhanced = 'true';
+                select.choices = new Choices(select, {
+                    searchEnabled: true,
+                    searchChoices: true,
+                    renderChoiceLimit: -1,
+                    searchResultLimit: -1,
+                    position: 'bottom',
+                    shouldSort: false,
+                    itemSelectText: '',
+                    noResultsText: 'No matching results',
+                    noChoicesText: 'No options available',
+                    searchPlaceholderValue: 'Search customer or product...'
+                });
+
+                function positionDropdown() {
+                    const choicesContainer = select.closest('.choices');
+                    const dropdown = choicesContainer && choicesContainer.querySelector('.choices__list--dropdown');
+                    if (!dropdown || !dropdown.classList.contains('is-active')) {
+                        return;
+                    }
+
+                    const rect = choicesContainer.getBoundingClientRect();
+                    const menuWidth = Math.max(rect.width, Math.min(360, window.innerWidth - 32));
+                    const left = Math.max(16, Math.min(rect.left, window.innerWidth - menuWidth - 16));
+                    const spaceBelow = Math.max(120, window.innerHeight - rect.bottom - 16);
+                    const spaceAbove = Math.max(120, rect.top - 16);
+                    const openAbove = spaceBelow < 260 && spaceAbove > spaceBelow;
+                    const menuHeight = Math.min(360, Math.max(120, openAbove ? spaceAbove : spaceBelow));
+                    dropdown.style.position = 'fixed';
+                    dropdown.style.top = openAbove ? 'auto' : rect.bottom + 'px';
+                    dropdown.style.bottom = openAbove ? (window.innerHeight - rect.top) + 'px' : 'auto';
+                    dropdown.style.left = left + 'px';
+                    dropdown.style.width = menuWidth + 'px';
+                    dropdown.style.maxHeight = menuHeight + 'px';
+                    dropdown.style.overflowY = 'auto';
+                }
+
+                select.addEventListener('showDropdown', function () {
+                    requestAnimationFrame(function () {
+                        positionDropdown();
+                        document.addEventListener('scroll', positionDropdown, true);
+                        window.addEventListener('resize', positionDropdown);
+                    });
+                });
+
+                select.addEventListener('hideDropdown', function () {
+                    document.removeEventListener('scroll', positionDropdown, true);
+                    window.removeEventListener('resize', positionDropdown);
+                });
+            }
+
+            function enhanceSearchableSelects(root) {
+                const selects = root.matches && root.matches('select')
+                    ? [root]
+                    : root.querySelectorAll('select');
+                selects.forEach(enhanceSearchableSelect);
+            }
+
+            document.addEventListener('DOMContentLoaded', function () {
+                enhanceSearchableSelects(document);
+
+                const observer = new MutationObserver(function (mutations) {
+                    mutations.forEach(function (mutation) {
+                        mutation.addedNodes.forEach(function (node) {
+                            if (node.nodeType === Node.ELEMENT_NODE) {
+                                enhanceSearchableSelects(node);
+                            }
+                        });
+                    });
+                });
+                observer.observe(document.body, { childList: true, subtree: true });
+            });
+        })();
+    </script>
+    
+    <!-- Notification Count Script -->
+    <script>
+        window.getCsrfToken = function () {
+            const cookie = document.cookie.split(';').find(function (item) {
+                return item.trim().startsWith('csrftoken=');
+            });
+            if (cookie) {
+                return decodeURIComponent(cookie.trim().substring('csrftoken='.length));
+            }
+            return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+        };
+
+        function refreshFormCsrfToken(form) {
+            if (!form || (form.method || 'get').toLowerCase() !== 'post') return;
+            const action = new URL(form.action || window.location.href, window.location.href);
+            if (action.origin !== window.location.origin) return;
+
+            const token = window.getCsrfToken();
+            if (!token) return;
+
+            let input = form.querySelector('[name=csrfmiddlewaretoken]');
+            if (!input) {
+                input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'csrfmiddlewaretoken';
+                form.appendChild(input);
+            }
+            input.value = token;
+        }
+
+        document.addEventListener('submit', function (event) {
+            refreshFormCsrfToken(event.target);
+        }, true);
+
+        const nativeFormSubmit = HTMLFormElement.prototype.submit;
+        HTMLFormElement.prototype.submit = function () {
+            refreshFormCsrfToken(this);
+            return nativeFormSubmit.call(this);
+        };
+
+        // Get notification count on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('{% url "notifications:count" %}')
+                .then(response => response.json())
+                .then(data => {
+                    const badge = document.getElementById('notification-badge');
+                    if (badge) {
+                        if (data.count > 0) {
+                            badge.textContent = data.count;
+                            badge.style.display = 'inline';
+                        } else {
+                            badge.style.display = 'none';
+                        }
+                    }
+                });
+        });
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+
+    <div class="modal fade" id="backupFeedbackModal" tabindex="-1" aria-labelledby="backupFeedbackTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content backup-feedback-modal">
+                <div class="modal-header">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="backup-feedback-icon" id="backupFeedbackIcon"><i class="fas fa-check"></i></span>
+                        <div>
+                            <h5 class="modal-title mb-0" id="backupFeedbackTitle">Backup complete</h5>
+                            <small class="text-muted" id="backupFeedbackSubtitle">Your backup request has finished.</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="backup-feedback-message" id="backupFeedbackMessage" role="status" aria-live="polite">
+                        Choose how you would like to save your backup. The local option downloads a copy to this computer. The online option emails it and needs an internet connection.
+                    </div>
+                    <div class="backup-feedback-actions" id="backupFeedbackActions">
+                        <form method="post" action="{% url 'notifications:backup_download' %}" id="backupDownloadForm">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-primary">
+                                <i class="fas fa-download me-2"></i>Save to this computer
+                            </button>
+                        </form>
+                        <form method="post" action="{% url 'notifications:backup_now' %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-cloud-upload-alt me-2"></i>Send backup online
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary px-4" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .backup-feedback-modal { overflow: hidden; border: 0; border-radius: 16px; box-shadow: 0 1rem 3rem rgba(15, 23, 42, .25); }
+        .backup-feedback-modal .modal-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid #dcfce7; background: #f0fdf4; }
+        .backup-feedback-modal .modal-body { padding: 1.5rem; }
+        .backup-feedback-icon { display: grid; place-items: center; width: 48px; height: 48px; flex: 0 0 48px; border-radius: 50%; color: #15803d; background: #dcfce7; font-size: 1.2rem; }
+        .backup-feedback-message { padding: 1rem; border-left: 4px solid #16a34a; border-radius: 8px; background: #f0fdf4; color: #166534; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+        .backup-feedback-modal .modal-footer { display: flex; justify-content: flex-end; }
+        .backup-feedback-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .65rem; margin-top: 1rem; }
+        .backup-feedback-modal.is-error .modal-header { border-bottom-color: #fee2e2; background: #fff7f7; }
+        .backup-feedback-modal.is-error .backup-feedback-icon { color: #b91c1c; background: #fee2e2; }
+        .backup-feedback-modal.is-error .backup-feedback-message { border-left-color: #dc2626; background: #fff1f2; color: #7f1d1d; }
+        .backup-feedback-modal.is-error .backup-feedback-actions .btn-outline-primary { border-color: #1d4ed8; color: #1d4ed8; }
+        #backupFeedbackModal.backup-feedback-fallback { position: fixed; inset: 0; z-index: 2000; display: flex !important; align-items: center; justify-content: center; overflow-y: auto; padding: 1rem; background: rgba(15, 23, 42, .55); }
+        #backupFeedbackModal.backup-feedback-fallback .modal-dialog { width: min(100%, 500px); margin: auto; }
+        #backupFeedbackModal.backup-feedback-fallback .modal-content { border-radius: 16px; background: #fff; color: #0f172a; }
+        #backupFeedbackModal.backup-feedback-fallback .modal-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+        #backupFeedbackModal.backup-feedback-fallback .modal-title { font-size: 1.25rem; font-weight: 700; }
+        #backupFeedbackModal.backup-feedback-fallback .modal-footer { display: flex; justify-content: flex-end; }
+        #backupFeedbackModal.backup-feedback-fallback .btn-close { width: 2rem; height: 2rem; border: 0; background: transparent; color: #475569; font-size: 1.5rem; cursor: pointer; }
+        #backupFeedbackModal.backup-feedback-fallback .btn-close::before { content: "\00d7"; }
+        #backupFeedbackModal.backup-feedback-fallback .btn { padding: .5rem 1rem; border: 0; border-radius: 7px; background: #2563eb; color: #fff; font-weight: 600; cursor: pointer; }
+    </style>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const feedback = document.querySelector('.backup-feedback-message[data-backup-feedback]');
+            const modalElement = document.getElementById('backupFeedbackModal');
+            if (!modalElement) return;
+            const modalContent = modalElement.querySelector('.backup-feedback-modal');
+            const messageElement = document.getElementById('backupFeedbackMessage');
+            const actionsElement = document.getElementById('backupFeedbackActions');
+            let fallbackCloseHandler;
+
+            function showBackupModal() {
+                if (window.bootstrap && window.bootstrap.Modal) {
+                    window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
+                    return;
+                }
+
+                modalElement.classList.add('show', 'backup-feedback-fallback');
+                modalElement.setAttribute('aria-modal', 'true');
+                modalElement.removeAttribute('aria-hidden');
+                document.body.classList.add('modal-open');
+                fallbackCloseHandler = function (event) {
+                    if (event.key === 'Escape' || event.target === modalElement ||
+                        (event.type === 'click' && event.target.closest('[data-bs-dismiss="modal"]'))) {
+                        closeBackupModal();
+                    }
+                };
+                document.addEventListener('keydown', fallbackCloseHandler);
+                modalElement.addEventListener('click', fallbackCloseHandler);
+            }
+
+            function closeBackupModal() {
+                if (window.bootstrap && window.bootstrap.Modal) {
+                    const instance = window.bootstrap.Modal.getInstance(modalElement);
+                    if (instance) instance.hide();
+                }
+                modalElement.classList.remove('backup-feedback-fallback', 'show');
+                modalElement.setAttribute('aria-hidden', 'true');
+                modalElement.removeAttribute('aria-modal');
+                document.body.classList.remove('modal-open');
+                if (fallbackCloseHandler) {
+                    document.removeEventListener('keydown', fallbackCloseHandler);
+                    modalElement.removeEventListener('click', fallbackCloseHandler);
+                    fallbackCloseHandler = null;
+                }
+            }
+
+            function setBackupFeedback(title, subtitle, message, isError, showActions) {
+                modalContent.classList.toggle('is-error', isError);
+                document.getElementById('backupFeedbackIcon').innerHTML = isError
+                    ? '<i class="fas fa-exclamation-triangle"></i>'
+                    : '<i class="fas fa-check"></i>';
+                document.getElementById('backupFeedbackTitle').textContent = title;
+                document.getElementById('backupFeedbackSubtitle').textContent = subtitle;
+                messageElement.textContent = message;
+                actionsElement.style.display = showActions ? 'flex' : 'none';
+                showBackupModal();
+            }
+
+            document.querySelectorAll('.backup-choice-trigger').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    setBackupFeedback(
+                        'Choose how to save your backup',
+                        'You decide where your backup goes.',
+                        'Save to this computer downloads a ZIP file to your device. Send backup online emails it and requires an internet connection.',
+                        false,
+                        true
+                    );
+                });
+            });
+
+            if (feedback) {
+                const succeeded = feedback.dataset.backupStatus === 'success';
+                setBackupFeedback(
+                    succeeded ? 'Backup sent online' : 'Backup could not be sent online',
+                    succeeded
+                        ? 'Your backup was emailed successfully.'
+                        : 'Your backup was not emailed. You can try again online or download it to this computer.',
+                    feedback.dataset.backupFeedback,
+                    !succeeded,
+                    !succeeded
+                );
+            }
+
+            const downloadForm = document.getElementById('backupDownloadForm');
+            if (downloadForm) {
+                downloadForm.addEventListener('submit', async function (event) {
+                    event.preventDefault();
+                    const button = downloadForm.querySelector('button[type="submit"]');
+                    const originalLabel = button.innerHTML;
+                    button.disabled = true;
+                    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Preparing download...';
+                    try {
+                        const response = await fetch(downloadForm.action, {
+                            method: 'POST',
+                            body: new FormData(downloadForm),
+                            credentials: 'same-origin',
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        });
+                        if (!response.ok) {
+                            const result = await response.json();
+                            throw new Error(result.message || 'The backup file could not be prepared. Please try again.');
+                        }
+                        const blob = await response.blob();
+                        const disposition = response.headers.get('Content-Disposition') || '';
+                        const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+                        const filename = filenameMatch ? filenameMatch[1] : 'gbms_backup.zip';
+                        const downloadUrl = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = downloadUrl;
+                        link.download = filename;
+                        document.body.appendChild(link);
+                        link.click();
+                        link.remove();
+                        window.setTimeout(function () { URL.revokeObjectURL(downloadUrl); }, 1000);
+                        setBackupFeedback(
+                            'Backup downloaded',
+                            'A copy has been downloaded to this computer.',
+                            'Your backup file is ready. Check your browser downloads if it does not open automatically.',
+                            false,
+                            false
+                        );
+                    } catch (error) {
+                        setBackupFeedback(
+                            'Backup could not be prepared',
+                            'The app could not create a backup file.',
+                            error.message,
+                            true,
+                            true
+                        );
+                    } finally {
+                        button.disabled = false;
+                        button.innerHTML = originalLabel;
+                    }
+                });
+            }
+
+            modalElement.querySelectorAll('[data-bs-dismiss="modal"]').forEach(function (button) {
+                button.addEventListener('click', closeBackupModal);
+            });
+        });
+    </script>
+</body>
+</html>

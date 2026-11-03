@@ -1,0 +1,381 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Cylinder Dashboard - GBMS{% endblock %}
+{% block page_title %}Cylinder Dashboard{% endblock %}
+
+{% block content %}
+<!-- FILTER SECTION -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label fw-bold">Filter by Category</label>
+                    <select name="category" class="form-select" onchange="this.form.submit()">
+                        <option value="">-- All Categories --</option>
+                        {% for cat in categories %}
+                            {% if cat %} <!-- This ensures empty strings aren't shown -->
+                                <option value="{{ cat }}" {% if selected_category == cat %}selected{% endif %}>
+                                    {{ cat }}
+                                </option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label fw-bold">Track One Product</label>
+                <select name="product" class="form-select" onchange="this.form.submit()">
+                    <option value="">-- All Cylinder Products --</option>
+                    {% for product in product_options %}
+                        <option value="{{ product.pk }}" {% if selected_product_id == product.pk|stringformat:'s' %}selected{% endif %}>
+                            {{ product.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% if selected_category %}
+            <div class="col-md-2">
+                <a href="{% url 'cylinders:dashboard' %}" class="btn btn-outline-secondary w-100">
+                    <i class="fas fa-times me-1"></i> Clear
+                </a>
+            </div>
+            {% endif %}
+            {% if selected_product_id %}
+            <div class="col-md-2">
+                <a href="{% url 'cylinders:dashboard' %}" class="btn btn-outline-secondary w-100">
+                    <i class="fas fa-times me-1"></i> Clear Product
+                </a>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<!-- Opening Inventory Setup -->
+<div class="alert alert-info mb-4">
+    <i class="fas fa-info-circle me-2"></i>
+    Set each product's <strong>Opening Full Cylinders</strong> and <strong>Opening Empty Cylinders</strong> in the product edit screen. These numbers are the total cylinders you owned when tracking started and are used to identify shortages.
+</div>
+
+<!-- Stats Cards -->
+<div class="row g-4 mb-4">
+    <!-- Total Cylinders (ALL owned) -->
+    <div class="col-md-3">
+        <div class="card stat-card border-primary">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-primary me-3">
+                    <i class="fas fa-cylinder fa-2x"></i>
+                </div>
+                <div>
+                    <small class="text-muted stat-label">Total Cylinders</small>
+                    <h3 class="stat-number">{{ total_cylinders }}</h3>
+                    <small class="text-muted">(In Shop + With Customers)</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- In Shop Total -->
+    <div class="col-md-3">
+        <div class="card stat-card border-info">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-info me-3">
+                    <i class="fas fa-store fa-2x"></i>
+                </div>
+                <div>
+                    <small class="text-muted stat-label">In Shop</small>
+                    <h3 class="stat-number">{{ in_shop_total }}</h3>
+                    <small class="text-muted">{{ filled_cylinders }} filled + {{ empty_cylinders }} empty</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- With Customers -->
+    <div class="col-md-3">
+        <div class="card stat-card border-warning">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-warning me-3">
+                    <i class="fas fa-users fa-2x"></i>
+                </div>
+                <div>
+                    <small class="text-muted stat-label">With Customers</small>
+                    <h3 class="stat-number text-warning">{{ cylinders_with_customers }}</h3>
+                    <small class="text-muted">Filled cylinders out</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Empty Cylinders -->
+    <div class="col-md-3">
+        <div class="card stat-card border-secondary">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-secondary me-3">
+                    <i class="fas fa-times-circle fa-2x"></i>
+                </div>
+                <div>
+                    <small class="text-muted stat-label">Empty Cylinders</small>
+                    <h3 class="stat-number text-secondary">{{ empty_cylinders }}</h3>
+                    <small class="text-muted">Available for filling</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Additional Row: Filled and Empty Breakdown -->
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="card stat-card border-success">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-success me-3">
+                    <i class="fas fa-check-circle fa-2x"></i>
+                </div>
+                <div>
+                    <small class="text-muted stat-label">Filled Cylinders</small>
+                    <h3 class="stat-number text-success">{{ filled_cylinders }}</h3>
+                    <small class="text-muted">In Shop</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card border-secondary">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-secondary me-3">
+                    <i class="fas fa-times-circle fa-2x"></i>
+                </div>
+                <div>
+                    <small class="text-muted stat-label">Empty Cylinders</small>
+                    <h3 class="stat-number text-secondary">{{ empty_cylinders }}</h3>
+                    <small class="text-muted">In Shop</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card border-warning">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-warning me-3">
+                    <i class="fas fa-cylinder fa-2x"></i>
+                </div>
+                <div>
+                    <small class="text-muted stat-label">With Customers</small>
+                    <h3 class="stat-number text-warning">{{ cylinders_with_customers }}</h3>
+                    <small class="text-muted">Out for filling</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Inventory Reconciliation Alert -->
+<div class="alert {% if shortage_cylinders %}alert-danger{% else %}alert-success{% endif %} mb-4">
+    <i class="fas {% if shortage_cylinders %}fa-triangle-exclamation{% else %}fa-circle-check{% endif %} me-2"></i>
+    <strong>Inventory reconciliation:</strong>
+    {{ physical_total }} total cylinders ({{ total_cylinders }} company-owned + {{ customer_owned_in_shop }} customer-owned in shop; {{ cylinders_with_customers }} company cylinders with customers),
+    {{ accounted_cylinders }} accounted for,
+    {{ shortage_cylinders }} short or unaccounted.
+</div>
+
+<!-- Today's Activity & Quick Stats -->
+<div class="row g-4 mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-calendar-day me-2"></i>Today's Activity</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h4 class="text-success">{{ today_filled }}</h4>
+                        <small class="text-muted">Filled Out</small>
+                    </div>
+                    <div class="col-6">
+                        <h4 class="text-warning">{{ today_empty }}</h4>
+                        <small class="text-muted">Empty Returned</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Quick Stats</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h4>{{ total_products }}</h4>
+                        <small class="text-muted">Product Types</small>
+                    </div>
+                    <div class="col-6">
+                        <h4>{{ total_customers }}</h4>
+                        <small class="text-muted">Active Customers</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Product Breakdown -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-boxes me-2"></i>Product-Wise Cylinder Breakdown</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Category</th>
+                        <th class="text-center">In Stock</th>
+                        <th class="text-center">Empty Stock</th>
+                        <th class="text-center">With Customers</th>
+                        <th class="text-center">Expected Total</th>
+                        <th class="text-center">Accounted</th>
+                        <th class="text-center">Shortage</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in product_breakdown %}
+                    <tr>
+                        <td><strong>{{ item.product.name }}</strong></td>
+                        <td>{{ item.product.category|default:"General" }}</td>
+                        <td class="text-center">
+                            <span class="badge bg-success">{{ item.stock }}</span>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-secondary">{{ item.empty_stock }}</span>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge {% if item.with_customers > 0 %}bg-warning{% else %}bg-secondary{% endif %}">
+                                {{ item.with_customers }}
+                            </span>
+                        </td>
+                        <td class="text-center"><strong>{{ item.expected_total }}</strong></td>
+                        <td class="text-center"><strong>{{ item.accounted_total }}</strong></td>
+                        <td class="text-center">
+                            <span class="badge {% if item.shortage %}bg-danger{% else %}bg-success{% endif %}">
+                                {{ item.shortage }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            {% if item.stock < 10 %}
+                                <span class="badge bg-danger">Low Stock</span>
+                            {% elif item.stock < 50 %}
+                                <span class="badge bg-warning">Medium</span>
+                            {% else %}
+                                <span class="badge bg-success">Good</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted">No cylinder products added yet</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Customer-Owned Cylinders Held In Shop -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-hand-holding me-2"></i>Customer-Owned Cylinders Held In Shop</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr><th>Customer</th><th>Code</th><th>Product / Cylinder</th><th class="text-center">Quantity</th><th>Ownership Status</th></tr>
+                </thead>
+                <tbody>
+                    {% for data in customer_owned_data %}
+                    <tr>
+                        <td>{{ data.customer.name }}</td>
+                        <td>{{ data.customer.customer_code }}</td>
+                        <td><strong>{{ data.product.name }}</strong></td>
+                        <td class="text-center"><span class="badge bg-info text-dark">{{ data.quantity }}</span></td>
+                        <td>Held for customer, not company stock</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted">No customer-owned cylinders are currently held in shop.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Customer Cylinder Distribution -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-user-tag me-2"></i>Cylinders With Customers</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>Code</th>
+                        <th>Product / Cylinder</th>
+                        <th class="text-center">Taken</th>
+                        <th class="text-center">Returned</th>
+                        <th class="text-center">Bring Forward</th>
+                        <th class="text-center">Net Cylinders</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for data in customer_cylinder_data %}
+                    <tr>
+                        <td>{{ data.customer.name }}</td>
+                        <td>{{ data.customer.customer_code }}</td>
+                        <td><strong>{{ data.product.name }}</strong></td>
+                        <td class="text-center">{{ data.total_taken }}</td>
+                        <td class="text-center">{{ data.total_returned }}</td>
+                        <td class="text-center">{{ data.bring_forward }}</td>
+                        <td class="text-center">
+                            <span class="badge {% if data.net_cylinders > 0 %}bg-danger{% else %}bg-success{% endif %}">
+                                {{ data.net_cylinders }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{% url 'customers:detail' data.customer.pk %}" class="btn btn-sm btn-primary">
+                                <i class="fas fa-eye"></i> View
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">
+                            <i class="fas fa-cylinder fa-2x mb-2 d-block"></i>
+                            No cylinders with customers yet
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Links -->
+<div class="mt-4 text-center">
+    <a href="{% url 'cylinders:ledger' %}" class="btn btn-primary">
+        <i class="fas fa-list me-2"></i>View Full Cylinder Ledger
+    </a>
+    <a href="{% url 'products:add' %}" class="btn btn-success">
+        <i class="fas fa-plus me-2"></i>Add New Product
+    </a>
+</div>
+{% endblock %}

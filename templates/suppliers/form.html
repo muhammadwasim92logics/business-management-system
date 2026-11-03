@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+    {% if form.instance.pk %}Edit Supplier{% else %}Add Supplier{% endif %} - GBMS
+{% endblock %}
+{% block page_title %}
+    {% if form.instance.pk %}✏️ Edit Supplier{% else %}🏭 Add Supplier{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="fas {% if form.instance.pk %}fa-edit{% else %}fa-plus-circle{% endif %} me-2"></i>
+            {% if form.instance.pk %}Edit Supplier{% else %}Add New Supplier{% endif %}
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+            {% endif %}
+            
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Name *</label>
+                    <input type="text" name="name" class="form-control" required value="{{ form.name.value|default:'' }}">
+                    {{ form.name.errors }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Mobile</label>
+                    <input type="text" name="mobile" class="form-control" value="{{ form.mobile.value|default:'' }}">
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label fw-bold">Address</label>
+                    <textarea name="address" class="form-control" rows="2">{{ form.address.value|default:'' }}</textarea>
+                </div>
+
+                <!-- BF Balance Field -->
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Opening Balance (BF)</label>
+                    <div class="input-group">
+                        <span class="input-group-text">PKR</span>
+                        <input type="number" name="bf_balance" class="form-control" step="0.01" min="0" value="{{ form.bf_balance.value|default:0 }}" placeholder="0.00" required>
+                        {{ form.bf_balance.errors }}
+                    </div>
+                    <small class="text-muted">Amount you already owe to this supplier (before any new purchases).</small>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">NTN</label>
+                    <input type="text" name="ntn" class="form-control" value="{{ form.ntn.value|default:'' }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">STN</label>
+                    <input type="text" name="stn" class="form-control" value="{{ form.stn.value|default:'' }}">
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label fw-bold">Notes</label>
+                    <textarea name="notes" class="form-control" rows="2">{{ form.notes.value|default:'' }}</textarea>
+                </div>
+            </div>
+            
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i>
+                    {% if form.instance.pk %}Update Supplier{% else %}Save Supplier{% endif %}
+                </button>
+                <a href="{% url 'suppliers:list' %}" class="btn btn-secondary">
+                    <i class="fas fa-times me-1"></i>Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

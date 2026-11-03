@@ -1,0 +1,48 @@
+<style>
+    .message-alert.customer-toast {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        z-index: 1080;
+        width: min(380px, calc(100vw - 2rem));
+        margin: 0;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.2);
+        animation: customer-toast-in 0.2s ease-out;
+    }
+
+    @keyframes customer-toast-in {
+        from { opacity: 0; transform: translateY(-8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 575.98px) {
+        .message-alert.customer-toast {
+            right: 1rem;
+            left: 1rem;
+            width: auto;
+        }
+    }
+</style>
+<script>
+    (function () {
+        function dismissCustomerToasts() {
+            document.querySelectorAll('.message-alert.customer-toast').forEach(function (toast, index) {
+                toast.setAttribute('role', 'status');
+                window.setTimeout(function () {
+                    if (!toast.isConnected) return;
+                    if (window.bootstrap && window.bootstrap.Alert) {
+                        window.bootstrap.Alert.getOrCreateInstance(toast).close();
+                    } else {
+                        toast.remove();
+                    }
+                }, 4500 + index * 200);
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', dismissCustomerToasts);
+        } else {
+            dismissCustomerToasts();
+        }
+    })();
+</script>

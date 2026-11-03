@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load fbr_filters %}
+
+{% block title %}FBR Invoice - {{ invoice.invoice_no }}{% endblock %}
+{% block page_title %}📄 FBR Invoice: {{ invoice.invoice_no }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-file-invoice me-2"></i>
+                FBR Invoice #{{ invoice.invoice_no }}
+            </h5>
+            <button onclick="window.print()" class="btn btn-light btn-sm">
+                <i class="fas fa-print me-1"></i>Print
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <p><strong>Invoice No:</strong> {{ invoice.invoice_no }}</p>
+                <p><strong>Date:</strong> {{ invoice.invoice_date|date:"d/m/Y" }}</p>
+                <p><strong>Customer:</strong> {{ invoice.customer.name }}</p>
+                <p><strong>Customer Code:</strong> {{ invoice.customer.customer_code }}</p>
+            </div>
+            <div class="col-md-6 text-end">
+                <p><strong>Subtotal (without tax):</strong> PKR {{ invoice.total_ex_value|truncate_decimal }}</p>
+                <p><strong>Total GST (18%):</strong> PKR {{ invoice.total_gst|truncate_decimal }}</p>
+                <p><strong>Total (subtotal + GST):</strong> PKR {{ invoice.total_value|truncate_decimal }}</p>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered">
+                <thead class="table-dark">
+                    <tr>
+                        <th>SR NO</th>
+                        <th>ITEM DESCRIPTION</th>
+                        <th class="text-center">QUANTITY</th>
+                        <th class="text-center">UNIT</th>
+                        <th class="text-end">RATE</th>
+                        <th class="text-end">SUBTOTAL<br><small>(WITHOUT TAX)</small></th>
+                        <th class="text-end">GST(18%)</th>
+                        <th class="text-end">TOTAL<br><small>(SUBTOTAL + GST)</small></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in invoice.items.all %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ item.product_name }}</td>
+                        <td class="text-center">
+                            <span class="money-display" tabindex="0" role="button"
+                                  title="Full value: {{ item.quantity|precise_decimal }}"
+                                  data-bs-toggle="popover"
+                                  data-bs-trigger="hover focus click"
+                                  data-bs-placement="top"
+                                  data-bs-content="Full value: {{ item.quantity|precise_decimal }}">
+                                {{ item.quantity|compact_decimal }}
+                            </span>
+                        </td>
+                        <td class="text-center">{{ item.unit }}</td>
+                        <td class="text-end">PKR {{ item.rate|truncate_decimal }}</td>
+                        <td class="text-end">PKR {{ item.ex_value|truncate_decimal }}</td>
+                        <td class="text-end">PKR {{ item.gst_amount|truncate_decimal }}</td>
+                        <td class="text-end"><strong>PKR {{ item.total_value|truncate_decimal }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-success">
+                    <tr>
+                        <td colspan="5"><strong>TOTAL</strong></td>
+                        <td class="text-end"><strong>PKR {{ invoice.total_ex_value|truncate_decimal }}</strong></td>
+                        <td class="text-end"><strong>PKR {{ invoice.total_gst|truncate_decimal }}</strong></td>
+                        <td class="text-end"><strong>PKR {{ invoice.total_value|truncate_decimal }}</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <div class="mt-3">
+            <a href="{% url 'fbr:ledger' %}?customer_id={{ invoice.customer.pk }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Back to FBR Ledger
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+    @media print {
+        .btn, .navbar, .card-header, .no-print {
+            display: none !important;
+        }
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+        }
+        .table thead th {
+            background: #333 !important;
+            color: white !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .table tfoot td {
+            background: #d4edda !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+    }
+</style>
+{% endblock %}

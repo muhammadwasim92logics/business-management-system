@@ -1,0 +1,423 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Customer Entry - GBMS{% endblock %}
+{% block page_title %}📋 Daily Customer Entry{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="fas fa-user-plus me-2"></i>
+            Customer Entry Form
+            <small class="float-end text-light">Date: {{ today }}</small>
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="post" id="customerEntryForm">
+            {% csrf_token %}
+            
+            <!-- ============================================================
+            SECTION 1: CUSTOMER INFORMATION
+            ============================================================ -->
+            <div class="section-header">
+                <h6 class="text-primary"><i class="fas fa-user me-2"></i>1. Customer Information</h6>
+                <hr>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group mb-3">
+                        <label class="form-label">Customer Type</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input type="radio" name="customer_type" id="existing_customer" value="existing" 
+                                       class="form-check-input" checked onchange="toggleCustomerType()">
+                                <label class="form-check-label" for="existing_customer">Existing Customer</label>
+                            </div>
+                            <div class="form-check">
+                                <input type="radio" name="customer_type" id="new_customer" value="new" 
+                                       class="form-check-input" onchange="toggleCustomerType()">
+                                <label class="form-check-label" for="new_customer">New Customer</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Existing Customer Selection -->
+            <div id="existingCustomerSection" class="row">
+                <div class="col-md-12">
+                    <div class="form-group mb-3">
+                        <label class="form-label">Select Customer</label>
+                        <select name="customer_id" id="customer_id" class="form-select" onchange="loadCustomerData(this.value)">
+                            <option value="">-- Select Customer --</option>
+                            {% for customer in customers %}
+                            <option value="{{ customer.pk }}">{{ customer.name }} ({{ customer.customer_code }}) - {{ customer.mobile }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- New Customer Fields -->
+            <div id="newCustomerSection" class="row" style="display: none;">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Customer Name *</label>
+                    <input type="text" name="name" id="name" class="form-control" placeholder="Full Name">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Mobile *</label>
+                    <input type="text" name="mobile" id="mobile" class="form-control" placeholder="03XX-XXXXXXX">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Alternate Mobile</label>
+                    <input type="text" name="alternate_mobile" id="alternate_mobile" class="form-control" placeholder="Optional">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Area</label>
+                    <input type="text" name="area" id="area" class="form-control" placeholder="City/Area">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Address</label>
+                    <input type="text" name="address" id="address" class="form-control" placeholder="Complete address">
+                </div>
+                <div class="col-12 mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea name="notes" id="notes" class="form-control" rows="2" placeholder="Additional notes"></textarea>
+                </div>
+            </div>
+            
+            <!-- Hidden field to track if new customer -->
+            <input type="hidden" name="is_new_customer" id="is_new_customer" value="false">
+            
+            <!-- ============================================================
+            SECTION 2: PRODUCTS / CYLINDERS
+            ============================================================ -->
+            <div class="section-header mt-4">
+                <h6 class="text-primary"><i class="fas fa-cylinder me-2"></i>2. Products & Cylinders</h6>
+                <hr>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-bordered" id="productsTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 25%;">Product</th>
+                            <th style="width: 15%;">Quantity (Taken)</th>
+                            <th style="width: 15%;">Empty Returned</th>
+                            <th style="width: 20%;">Unit Price (PKR)</th>
+                            <th style="width: 15%;">Total (PKR)</th>
+                            <th style="width: 10%;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Row 1 -->
+                        <tr>
+                            <td>
+                                <select name="product_ids[]" class="form-select product-select" onchange="updateProductPrice(this)">
+                                    <option value="">-- Select --</option>
+                                    {% for product in products %}
+                                    <option value="{{ product.pk }}" data-price="{{ product.unit_price }}">
+                                        {{ product.name }} (Stock: {{ product.stock_quantity }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td>
+                                <input type="number" name="quantities[]" class="form-control quantity" 
+                                       min="0" step="1" onchange="calculateRowTotal(this)">
+                            </td>
+                            <td>
+                                <input type="number" name="empty_returns[]" class="form-control empty-return" 
+                                       min="0" step="1" value="0">
+                            </td>
+                            <td>
+                                <input type="number" name="product_prices[]" class="form-control product-price" 
+                                       step="0.01" min="0" onchange="calculateRowTotal(this)">
+                            </td>
+                            <td>
+                                <input type="text" class="form-control row-total" readonly value="0.00">
+                            </td>
+                            <td class="text-center">
+                                <button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4" class="text-end"><strong>Total Amount:</strong></td>
+                            <td colspan="2">
+                                <input type="text" id="grandTotal" class="form-control fw-bold text-primary" 
+                                       readonly value="0.00" style="font-size: 1.2rem;">
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            
+            <div class="text-center mb-3">
+                <button type="button" class="btn btn-success" onclick="addProductRow()">
+                    <i class="fas fa-plus me-2"></i>Add Product
+                </button>
+            </div>
+            
+            <!-- ============================================================
+            SECTION 3: PAYMENT DETAILS
+            ============================================================ -->
+            <div class="section-header mt-4">
+                <h6 class="text-primary"><i class="fas fa-coins me-2"></i>3. Payment Details</h6>
+                <hr>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="form-check">
+                        <input type="checkbox" name="payment_made" id="payment_made" class="form-check-input" 
+                               onchange="togglePaymentFields()">
+                        <label class="form-check-label" for="payment_made">
+                            <i class="fas fa-check-circle text-success"></i> Payment Made
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Payment Amount (PKR)</label>
+                    <input type="number" name="payment_amount" id="payment_amount" class="form-control" 
+                           step="0.01" min="0" placeholder="0.00" disabled>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Payment Type</label>
+                    <select name="payment_type" id="payment_type" class="form-select" disabled>
+                        <option value="cash">Cash</option>
+                        <option value="transfer">Bank Transfer</option>
+                        <option value="upi">UPI</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Summary -->
+            <div class="alert alert-info mt-3">
+                <div class="row">
+                    <div class="col-md-4">
+                        <strong>Total Products:</strong> <span id="totalProducts">0</span>
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Total Cylinders:</strong> <span id="totalCylinders">0</span>
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Total Amount:</strong> PKR <span id="displayTotal">0.00</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Form Actions -->
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="fas fa-save me-2"></i>Save Entry
+                </button>
+                <a href="{% url 'customers:list' %}" class="btn btn-secondary btn-lg">
+                    <i class="fas fa-times me-2"></i>Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // ============================================================
+    // Toggle Customer Type
+    // ============================================================
+    function toggleCustomerType() {
+        const isExisting = document.querySelector('input[name="customer_type"]:checked').value === 'existing';
+        
+        document.getElementById('existingCustomerSection').style.display = isExisting ? 'flex' : 'none';
+        document.getElementById('newCustomerSection').style.display = isExisting ? 'none' : 'flex';
+        document.getElementById('is_new_customer').value = isExisting ? 'false' : 'true';
+        
+        // Enable/disable fields
+        document.getElementById('customer_id').disabled = !isExisting;
+        document.getElementById('name').disabled = isExisting;
+        document.getElementById('mobile').disabled = isExisting;
+        document.getElementById('alternate_mobile').disabled = isExisting;
+        document.getElementById('area').disabled = isExisting;
+        document.getElementById('address').disabled = isExisting;
+        document.getElementById('notes').disabled = isExisting;
+    }
+    
+    // ============================================================
+    // Load Customer Data
+    // ============================================================
+    function loadCustomerData(customerId) {
+        if (customerId) {
+            // You can add AJAX to load customer details if needed
+            console.log('Customer selected:', customerId);
+        }
+    }
+    
+    // ============================================================
+    // Add Product Row
+    // ============================================================
+    function addProductRow() {
+        const table = document.getElementById('productsTable').getElementsByTagName('tbody')[0];
+        const newRow = table.insertRow();
+        
+        // Get product options
+        const productSelects = document.querySelectorAll('.product-select');
+        const firstSelect = productSelects[0];
+        const optionsHTML = firstSelect.innerHTML;
+        
+        newRow.innerHTML = `
+            <td>
+                <select name="product_ids[]" class="form-select product-select" onchange="updateProductPrice(this)">
+                    ${optionsHTML}
+                </select>
+            </td>
+            <td>
+                <input type="number" name="quantities[]" class="form-control quantity" 
+                       min="0" step="1" onchange="calculateRowTotal(this)">
+            </td>
+            <td>
+                <input type="number" name="empty_returns[]" class="form-control empty-return" 
+                       min="0" step="1" value="0">
+            </td>
+            <td>
+                <input type="number" name="product_prices[]" class="form-control product-price" 
+                       step="0.01" min="0" onchange="calculateRowTotal(this)">
+            </td>
+            <td>
+                <input type="text" class="form-control row-total" readonly value="0.00">
+            </td>
+            <td class="text-center">
+                <button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </td>
+        `;
+        
+        updateSummary();
+    }
+    
+    // ============================================================
+    // Remove Row
+    // ============================================================
+    function removeRow(button) {
+        const row = button.closest('tr');
+        const tbody = row.parentNode;
+        if (tbody.rows.length > 1) {
+            row.remove();
+            updateSummary();
+        } else {
+            alert('You must keep at least one product row.');
+        }
+    }
+    
+    // ============================================================
+    // Calculate Row Total
+    // ============================================================
+    function calculateRowTotal(element) {
+        const row = element.closest('tr');
+        const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
+        const price = parseFloat(row.querySelector('.product-price').value) || 0;
+        const total = quantity * price;
+        row.querySelector('.row-total').value = total.toFixed(2);
+        updateSummary();
+    }
+    
+    // ============================================================
+    // Update Product Price
+    // ============================================================
+    function updateProductPrice(select) {
+        const row = select.closest('tr');
+        const price = select.options[select.selectedIndex].getAttribute('data-price') || 0;
+        row.querySelector('.product-price').value = price;
+        calculateRowTotal(row.querySelector('.product-price'));
+    }
+    
+    // ============================================================
+    // Update Summary
+    // ============================================================
+    function updateSummary() {
+        const rows = document.querySelectorAll('#productsTable tbody tr');
+        let totalAmount = 0;
+        let totalCylinders = 0;
+        let productCount = 0;
+        
+        rows.forEach(row => {
+            const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
+            const price = parseFloat(row.querySelector('.product-price').value) || 0;
+            const total = quantity * price;
+            
+            totalAmount += total;
+            totalCylinders += quantity;
+            
+            if (quantity > 0) productCount++;
+        });
+        
+        document.getElementById('grandTotal').value = totalAmount.toFixed(2);
+        document.getElementById('displayTotal').textContent = totalAmount.toFixed(2);
+        document.getElementById('totalProducts').textContent = productCount;
+        document.getElementById('totalCylinders').textContent = totalCylinders;
+        
+        // Auto-fill payment amount if not set
+        const paymentAmount = document.getElementById('payment_amount');
+        if (!paymentAmount.value || parseFloat(paymentAmount.value) === 0) {
+            paymentAmount.placeholder = totalAmount.toFixed(2);
+        }
+    }
+    
+    // ============================================================
+    // Toggle Payment Fields
+    // ============================================================
+    function togglePaymentFields() {
+        const isChecked = document.getElementById('payment_made').checked;
+        document.getElementById('payment_amount').disabled = !isChecked;
+        document.getElementById('payment_type').disabled = !isChecked;
+        
+        if (isChecked) {
+            document.getElementById('payment_amount').focus();
+            const total = parseFloat(document.getElementById('grandTotal').value) || 0;
+            if (!document.getElementById('payment_amount').value) {
+                document.getElementById('payment_amount').value = total.toFixed(2);
+            }
+        }
+    }
+    
+    // ============================================================
+    // Initialize
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        // Start with existing customer selected
+        toggleCustomerType();
+        updateSummary();
+        
+        // Add keyboard shortcut for adding products (Ctrl+Shift+P)
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.shiftKey && e.key === 'P') {
+                e.preventDefault();
+                addProductRow();
+            }
+        });
+    });
+</script>
+
+<style>
+    .section-header h6 {
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+    .section-header hr {
+        margin-top: 0.25rem;
+    }
+    #productsTable tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+    .btn-lg {
+        padding: 0.75rem 2rem;
+        font-size: 1.1rem;
+    }
+</style>
+{% endblock %}

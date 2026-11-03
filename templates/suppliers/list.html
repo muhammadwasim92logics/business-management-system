@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Suppliers - GBMS{% endblock %}
+{% block page_title %}🏭 Suppliers{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-truck me-2"></i>Supplier List
+            </h5>
+            <a href="{% url 'suppliers:add' %}" class="btn btn-light btn-sm">
+                <i class="fas fa-plus me-1"></i>Add Supplier
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        <!-- Search -->
+        <form method="get" class="mb-3">
+            <div class="row g-2">
+                <div class="col-md-8">
+                    <input type="text" name="search" class="form-control" placeholder="Search suppliers..." value="{{ request.GET.search }}">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search me-1"></i>Search
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <div class="table-responsive">
+            <table class="table table-hover table-bordered">
+                <thead class="table-light">
+                    <tr>
+                        <th>Code</th>
+                        <th>Name</th>
+                        <th>Mobile</th>
+                        <th>NTN</th>
+                        <th>STN</th>
+                        <th>BF Balance</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for supplier in suppliers %}
+                    <tr>
+                        <td><span class="badge bg-secondary">{{ supplier.supplier_code }}</span></td>
+                        <td><strong>{{ supplier.name }}</strong></td>
+                        <td>{{ supplier.mobile|default:"—" }}</td>
+                        <td>{{ supplier.ntn|default:"—" }}</td>
+                        <td>{{ supplier.stn|default:"—" }}</td>
+                        <td>
+                            <span class="fw-bold {% if supplier.bf_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                                PKR {{ supplier.bf_balance|floatformat:2 }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{% url 'suppliers:edit' supplier.pk %}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-edit"></i> Edit
+                            </a>
+                            <a href="{% url 'suppliers:delete' supplier.pk %}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this supplier?');">
+                                <i class="fas fa-trash"></i> Delete
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-3 text-muted">
+                            No suppliers found. <a href="{% url 'suppliers:add' %}">Add one</a>.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

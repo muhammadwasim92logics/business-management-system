@@ -1,0 +1,862 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Supplier Product Ledger - GBMS{% endblock %}
+{% block page_title %}📒 Supplier Product Ledger{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="fas fa-filter me-2"></i>Filter Ledger
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label fw-bold">Supplier</label>
+                <select name="supplier" class="form-select" data-no-choices="true" required>
+                    <option value="">-- Select Supplier --</option>
+                    {% for supplier in suppliers %}
+                    <option value="{{ supplier.id }}" {% if selected_supplier == supplier.id|stringformat:"s" %}selected{% endif %}>
+                        {{ supplier.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-5">
+                <label class="form-label fw-bold">Products</label>
+                <div class="dropdown supplier-ledger-product-picker">
+                    <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button"
+                            data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" {% if not selected_supplier %}disabled{% endif %}>
+                        {% if selected_product_ids %}{{ selected_product_ids|length }} product(s) selected{% else %}Select products{% endif %}
+                    </button>
+                    <div class="dropdown-menu w-100 p-2" style="max-height: 320px; overflow-y: auto;">
+                        {% for product in products %}
+                        <label class="dropdown-item d-flex align-items-center gap-2 text-wrap">
+                            <input class="form-check-input mt-0" type="checkbox" name="products" value="{{ product.pk }}"
+                                   {% if product.pk|stringformat:'s' in selected_product_ids %}checked{% endif %}>
+                            <span>{{ product.name }}</span>
+                        </label>
+                        {% empty %}
+                        <span class="dropdown-item-text text-muted">Select a supplier to load products.</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% if selected_supplier %}
+                <small class="text-muted">All products are selected by default. Uncheck any you do not want to view.</small>
+                {% endif %}
+            </div>
+            
+            <div class="col-md-2">
+                <label class="form-label fw-bold">From Date</label>
+                <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">To Date</label>
+                <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+            </div>
+            
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-search me-1"></i>View Ledger
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if unallocated_payments %}
+<div class="card mt-4">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="fas fa-money-bill-wave me-2"></i>Supplier-Level Payments</h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted mb-3">These payments are not assigned to a specific product and are excluded from product balances. Previous and remaining balances include the supplier opening balance and all purchases and payments.</p>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Payment No</th>
+                        <th>Invoice</th>
+                        <th>Description</th>
+                        <th>Method</th>
+                        <th class="text-end">Previous Balance</th>
+                        <th class="text-end">Amount</th>
+                        <th class="text-end">Remaining Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payment in unallocated_payments %}
+                    <tr>
+                        <td>{{ payment.purchase_date|date:'d M Y' }}</td>
+                        <td>{{ payment.purchase_no }}</td>
+                        <td>{{ payment.invoice_no|default:'—' }}</td>
+                        <td>{{ payment.description|default:'Payment Only' }}</td>
+                        <td>{{ payment.get_payment_type_display }}</td>
+                        <td class="text-end">PKR {{ payment.previous_balance|floatformat:2 }}</td>
+                        <td class="text-end text-success">PKR {{ payment.paid_amount|floatformat:2 }}</td>
+                        <td class="text-end fw-bold {% if payment.remaining_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                            PKR {{ payment.remaining_balance|floatformat:2 }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="fw-bold">
+                        <td colspan="6">Total unallocated payments</td>
+                        <td class="text-end text-success">PKR {{ unallocated_payments_total|floatformat:2 }}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% for ledger in ledger_sets %}
+{% with ledger_entries=ledger.ledger_entries product_name=ledger.product_name supplier_name=ledger.supplier_name is_argon=ledger.is_argon is_lpg=ledger.is_lpg total_quantity=ledger.total_quantity total_subtotal=ledger.total_subtotal total_tax=ledger.total_tax total_amount=ledger.total_amount total_paid=ledger.total_paid final_balance=ledger.final_balance total_delivery_charges=ledger.total_delivery_charges total_extra_charges=ledger.total_extra_charges total_m3=ledger.total_m3 total_cylinders=ledger.total_cylinders avg_m3_per_cylinder=ledger.avg_m3_per_cylinder %}
+{% if ledger_entries %}
+<!-- Ledger Table -->
+<div class="card mt-4">
+    <div class="card-header bg-success text-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-book me-2"></i>
+                {% if is_unified %}{{ supplier_name }} Unified Ledger{% else %}{{ product_name }} - {{ supplier_name }} Ledger{% endif %}
+                {% if is_unified %}
+                <span class="badge bg-light text-dark ms-2">All selected products</span>
+                {% endif %}
+                {% if is_argon %}
+                <span class="badge bg-info text-dark ms-2">Argon/Gas Mix</span>
+                {% elif is_lpg %}
+                <span class="badge bg-warning text-dark ms-2">LPG</span>
+                {% endif %}
+            </h5>
+            <small>
+                {{ start_date|default:"All time" }} to {{ end_date|default:"Today" }}
+            </small>
+        </div>
+    </div>
+    <div class="card-body">
+     <div class="table-responsive">
+    {% if is_unified %}
+    <table class="table table-hover table-bordered table-sm">
+     <thead class="table-light">
+         <tr>
+             <th>#</th>
+             <th>Date</th>
+             <th>Day</th>
+             <th>Purchase No</th>
+             <th>Invoice</th>
+             <th>Product</th>
+             <th class="text-end">Qty</th>
+             <th class="text-end">m³</th>
+             <th class="text-end">Cylinders</th>
+             <th class="text-end">Rate</th>
+             <th class="text-end">BR</th>
+             <th class="text-end">Rate/KG</th>
+             <th class="text-end">Weight</th>
+             <th class="text-end">Rate/Cylinder</th>
+             <th class="text-end">Rate w/o Tax</th>
+             <th class="text-end">Tax/M³</th>
+             <th class="text-end">Rate w/Tax/M³</th>
+             <th class="text-end">Total Amount</th>
+             <th class="text-end">Paid</th>
+             <th class="text-end">Balance</th>
+             <th class="text-end">Extra Charges</th>
+             <th>Description</th>
+             <th class="text-center">Action</th>
+         </tr>
+     </thead>
+     <tbody>
+         {% for entry in ledger_entries %}
+         <tr class="{% if entry.is_bf_row %}table-info fw-bold{% endif %}">
+             <td>{{ forloop.counter }}</td>
+             <td>{% if entry.is_bf_row %}Opening Balance (BF){% else %}{{ entry.date|date:'d M Y' }}{% endif %}</td>
+             <td>{% if entry.is_bf_row %}Starting Point{% else %}{{ entry.day }}{% endif %}</td>
+             <td>{% if entry.is_bf_row %}—{% else %}{{ entry.purchase_no }}{% endif %}</td>
+             <td>{% if entry.is_bf_row %}—{% else %}{{ entry.invoice_no|default:'—' }}{% endif %}</td>
+             <td>{% if entry.is_bf_row %}—{% else %}{{ entry.product_name }}{% endif %}</td>
+             <td class="text-end">{% if entry.is_bf_row %}—{% else %}{{ entry.quantity|floatformat:2 }}{% endif %}</td>
+             <td class="text-end">
+                 {% if entry.is_bf_row %}—{% elif entry.is_argon and entry.total_cubic_meters %}{{ entry.total_cubic_meters|floatformat:4 }}{% elif entry.cubic_meters %}{{ entry.cubic_meters|floatformat:4 }}{% else %}—{% endif %}
+             </td>
+             <td class="text-end">{% if entry.is_bf_row or not entry.cylinder_qty %}—{% else %}{{ entry.cylinder_qty }}{% endif %}</td>
+             <td class="text-end">{% if entry.is_bf_row %}—{% else %}PKR {{ entry.unit_price|floatformat:2 }}{% endif %}</td>
+             <td class="text-end">{% if entry.is_lpg %}{{ entry.br_rate|floatformat:2 }}{% else %}—{% endif %}</td>
+             <td class="text-end">{% if entry.is_lpg %}PKR {{ entry.rate_per_kg|floatformat:2 }}{% else %}—{% endif %}</td>
+             <td class="text-end">{% if entry.is_lpg %}{{ entry.cylinder_weight|floatformat:2 }} kg{% else %}—{% endif %}</td>
+             <td class="text-end">{% if entry.is_argon or entry.is_lpg %}PKR {{ entry.rate_per_cylinder|floatformat:2 }}{% else %}—{% endif %}</td>
+             <td class="text-end">{% if entry.rate_without_tax %}PKR {{ entry.rate_without_tax|floatformat:2 }}{% else %}—{% endif %}</td>
+             <td class="text-end">{% if entry.tax_per_m3 %}PKR {{ entry.tax_per_m3|floatformat:2 }}{% else %}—{% endif %}</td>
+             <td class="text-end">{% if entry.rate_with_tax_per_m3 %}PKR {{ entry.rate_with_tax_per_m3|floatformat:2 }}{% else %}—{% endif %}</td>
+             <td class="text-end">{% if entry.is_bf_row %}—{% else %}PKR {{ entry.total_amount|floatformat:2 }}{% endif %}</td>
+             <td class="text-end">{% if entry.is_bf_row %}—{% else %}PKR {{ entry.paid_amount|floatformat:2 }}{% endif %}</td>
+             <td class="text-end">{% if entry.is_bf_row %}PKR {{ entry.balance|floatformat:2 }}{% else %}PKR {{ entry.balance|floatformat:2 }}{% endif %}</td>
+             <td class="text-end">{% if entry.is_bf_row %}—{% else %}PKR {{ entry.extra_charges|floatformat:2 }}{% endif %}</td>
+             <td>{{ entry.description|default:'—' }}</td>
+             <td class="text-center">
+                 {% if not entry.is_bf_row %}
+                 <div class="btn-group btn-group-sm">
+                     <button type="button" class="btn btn-sm btn-warning btn-ledger-edit-purchase" data-entry-id="{{ entry.id }}" onclick="openLedgerPurchaseEdit('{{ entry.id }}')"><i class="fas fa-edit"></i></button>
+                     <button type="button" class="btn btn-sm btn-danger btn-ledger-delete-purchase" data-entry-id="{{ entry.id }}" onclick="deleteLedgerPurchase('{{ entry.id }}')"><i class="fas fa-trash"></i></button>
+                 </div>
+                 {% else %}—{% endif %}
+             </td>
+         </tr>
+         {% endfor %}
+     </tbody>
+     <tfoot class="table-dark">
+         <tr>
+             <td colspan="6"><strong>TOTAL</strong></td>
+             <td class="text-end"><strong>{{ total_quantity|floatformat:2 }}</strong></td>
+             <td></td>
+             <td class="text-end"><strong>{{ total_cylinders }}</strong></td>
+             <td colspan="8"></td>
+             <td class="text-end"><strong>PKR {{ total_amount|floatformat:2 }}</strong></td>
+             <td class="text-end"><strong>PKR {{ total_paid|floatformat:2 }}</strong></td>
+             <td class="text-end"><strong>PKR {{ final_balance|floatformat:2 }}</strong></td>
+             <td class="text-end"><strong>PKR {{ total_extra_charges|floatformat:2 }}</strong></td>
+             <td colspan="2"></td>
+         </tr>
+     </tfoot>
+    </table>
+    {% else %}
+    <table class="table table-hover table-bordered table-sm">
+        <thead class="table-light">
+            <tr>
+                <th>#</th>
+                <th>Date</th>
+                <th>Day</th>
+                <th>Purchase No</th>
+                <th>Invoice</th>
+                <th>Supplier</th>
+                <th>Product</th>
+                
+                {% if ledger_entries %}
+                    {% if ledger_entries.0.is_argon %}
+                        <!-- Argon-specific columns -->
+                        <th class="text-center">Total M³</th>
+                        <th class="text-center">Cylinders</th>
+                        <th class="text-center">M³/Cyl</th>
+                        <th class="text-end">Rate w/o Tax/M³</th>
+                        <th class="text-end">Tax/M³</th>
+                        <th class="text-end">Rate w/Tax/M³</th>
+                        <th class="text-end">Rate/Cylinder</th>
+                        <th class="text-end">Total Amount</th>
+                        <th class="text-end">Paid</th>
+                        <th class="text-end">Balance</th>
+                        <th class="text-end">Extra Charges</th>
+                    {% elif ledger_entries.0.is_lpg %}
+                        <!-- LPG-specific columns -->
+                        <th class="text-end">Rate</th>
+                        <th class="text-end">BR</th>
+                        <th class="text-end">Rate Per KG</th>
+                        <th class="text-end">Weight</th>
+                        <th class="text-end">Rate/Cylinder</th>
+                        <th class="text-end">Qty</th>
+                        <th class="text-end">Total Amount</th>
+                        <th class="text-end">Paid</th>
+                        <th class="text-end">Balance</th>
+                        <th class="text-end">Extra Charges</th>
+                    {% else %}
+                        <!-- Regular columns for Oxygen/Nitrogen/CO2 -->
+                        <th class="text-center">Qty (kg)</th>
+                        <th class="text-center">m³</th>
+                        <th class="text-end">Rate</th>
+                        <th class="text-end">Rate w/o Tax</th>
+                        <th class="text-end">Tax/M³</th>
+                        <th class="text-end">Rate w/ Tax/M³</th>
+                        <th class="text-end">Total Amount</th>
+                        <th class="text-end">Paid</th>
+                        <th class="text-end">Balance</th>
+                        <th class="text-end">Extra Charges</th>
+                    {% endif %}
+                {% else %}
+                    <!-- Default columns when no entries -->
+                    <th class="text-center">Qty</th>
+                    <th class="text-center">m³</th>
+                    <th class="text-end">Rate</th>
+                    <th class="text-end">Total Amount</th>
+                    <th class="text-end">Paid</th>
+                    <th class="text-end">Balance</th>
+                {% endif %}
+                
+                <th>Description</th>
+                <th class="text-center">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in ledger_entries %}
+            <tr class="{% if entry.is_bf_row %}table-info fw-bold{% endif %}">
+                <td>{{ forloop.counter }}</td>
+                <td>
+                    {% if entry.is_bf_row %}
+                        <i class="fas fa-arrow-right me-2"></i>Opening Balance (BF)
+                    {% else %}
+                        {{ entry.date|date:'d M Y' }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if entry.is_bf_row %}
+                        <span class="badge bg-secondary">Starting Point</span>
+                    {% else %}
+                        <small>{{ entry.day }}</small>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if entry.is_bf_row %}
+                        —
+                    {% else %}
+                        <small>{{ entry.purchase_no }}</small>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if entry.is_bf_row %}
+                        —
+                    {% else %}
+                        <small>{{ entry.invoice_no|default:"—" }}</small>
+                    {% endif %}
+                </td>
+                <td>{% if entry.is_bf_row %}—{% else %}{{ supplier_name }}{% endif %}</td>
+                <td>{% if entry.is_bf_row %}—{% else %}{{ entry.product_name|default:product_name }}{% endif %}</td>
+                
+                {% if entry.is_argon %}
+                <!-- Argon-specific columns -->
+                <td class="text-center">{% if entry.is_bf_row %}—{% else %}{{ entry.total_cubic_meters|floatformat:2 }}{% endif %}</td>
+                <td class="text-center">{% if entry.is_bf_row %}—{% else %}{{ entry.cylinder_qty }}{% endif %}</td>
+                <td class="text-center">{% if entry.is_bf_row %}—{% else %}{{ entry.m3_per_cylinder|floatformat:4 }}{% endif %}</td>
+                <td class="text-end">{% if entry.is_bf_row %}—{% else %}PKR {{ entry.rate_without_tax|floatformat:2 }}{% endif %}</td>
+                <td class="text-end text-danger">{% if entry.is_bf_row %}—{% else %}PKR {{ entry.tax_per_m3|floatformat:2 }}{% endif %}</td>
+                <td class="text-end text-success">{% if entry.is_bf_row %}—{% else %}PKR {{ entry.rate_with_tax_per_m3|floatformat:2 }}{% endif %}</td>
+                <td class="text-end">{% if entry.is_bf_row %}—{% else %}PKR {{ entry.rate_per_cylinder|floatformat:2 }}{% endif %}</td>
+                <td class="text-end">{% if entry.is_bf_row %}—{% else %}<span class="text-primary fw-bold">PKR {{ entry.total_amount|floatformat:2 }}</span>{% endif %}</td>
+                <td class="text-end">{% if entry.is_bf_row %}—{% else %}<span class="text-success">PKR {{ entry.paid_amount|floatformat:2 }}</span>{% endif %}</td>
+                <td class="text-end">
+                    {% if entry.is_bf_row %}—{% else %}
+                    <span class="fw-bold {% if entry.balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                        PKR {{ entry.balance|floatformat:2 }}
+                    </span>
+                    {% endif %}
+                </td>
+                <td class="text-end text-warning">{% if entry.is_bf_row %}—{% else %}PKR {{ entry.extra_charges|floatformat:2 }}{% endif %}</td>
+                <td class="text-center">
+                    {% if not entry.is_bf_row %}
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-sm btn-warning btn-ledger-edit-purchase" data-entry-id="{{ entry.id }}" onclick="openLedgerPurchaseEdit('{{ entry.id }}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger btn-ledger-delete-purchase" data-entry-id="{{ entry.id }}" onclick="deleteLedgerPurchase('{{ entry.id }}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    {% if not entry.is_bf_row %}
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-sm btn-warning btn-ledger-edit-purchase" data-entry-id="{{ entry.id }}" onclick="openLedgerPurchaseEdit('{{ entry.id }}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger btn-ledger-delete-purchase" data-entry-id="{{ entry.id }}" onclick="deleteLedgerPurchase('{{ entry.id }}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                
+                {% elif entry.is_lpg %}
+                <!-- LPG-specific columns -->
+                <td class="text-end">{% if entry.is_bf_row %}—{% else %}PKR {{ entry.unit_price|floatformat:2 }}{% endif %}</td>
+                <td class="text-end">{% if entry.is_bf_row %}—{% else %}{{ entry.br_rate|floatformat:2 }}{% endif %}</td>
+                <td class="text-end">{% if entry.is_bf_row %}—{% else %}PKR {{ entry.rate_per_kg|floatformat:2 }}{% endif %}</td>
+                <td class="text-end">{% if entry.is_bf_row %}—{% else %}{{ entry.cylinder_weight|floatformat:0 }} kg{% endif %}</td>
+                <td class="text-end">{% if entry.is_bf_row %}—{% else %}PKR {{ entry.rate_per_cylinder|floatformat:2 }}{% endif %}</td>
+                <td class="text-end">{% if entry.is_bf_row %}—{% else %}{{ entry.cylinder_qty }}{% endif %}</td>
+                <td class="text-end">{% if entry.is_bf_row %}—{% else %}<span class="text-primary fw-bold">PKR {{ entry.total_amount|floatformat:2 }}</span>{% endif %}</td>
+                <td class="text-end">{% if entry.is_bf_row %}—{% else %}<span class="text-success">PKR {{ entry.paid_amount|floatformat:2 }}</span>{% endif %}</td>
+                <td class="text-end">
+                    {% if entry.is_bf_row %}—{% else %}
+                    <span class="fw-bold {% if entry.balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                        PKR {{ entry.balance|floatformat:2 }}
+                    </span>
+                    {% endif %}
+                </td>
+                <td class="text-end text-warning">{% if entry.is_bf_row %}—{% else %}PKR {{ entry.extra_charges|floatformat:2 }}{% endif %}</td>
+                <td class="text-center">
+                    {% if not entry.is_bf_row %}
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-sm btn-warning btn-ledger-edit-purchase" data-entry-id="{{ entry.id }}" onclick="openLedgerPurchaseEdit('{{ entry.id }}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger btn-ledger-delete-purchase" data-entry-id="{{ entry.id }}" onclick="deleteLedgerPurchase('{{ entry.id }}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                
+                <!-- Regular columns for Oxygen/Nitrogen/CO2 -->
+                {% else %}
+                <!-- Regular columns for Oxygen/Nitrogen/CO2 -->
+                <td class="text-center">
+                    {% if entry.is_bf_row %}—{% else %}
+                        {% if entry.is_oxygen or entry.is_nitrogen %}
+                            <span class="badge bg-primary text-white">{{ entry.quantity|floatformat:2 }} KG</span>
+                        {% else %}
+                            {{ entry.quantity|floatformat:2 }}
+                        {% endif %}
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    {% if entry.is_bf_row %}—{% else %}
+                        {% if entry.cubic_meters > 0 %}
+                            <span class="badge bg-info text-dark">{{ entry.cubic_meters|floatformat:4 }} M³</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    {% endif %}
+                </td>
+                <td class="text-end">{% if entry.is_bf_row %}—{% else %}PKR {{ entry.unit_price|floatformat:2 }}{% endif %}</td>
+                <td class="text-end">
+                    {% if entry.is_bf_row %}—{% else %}
+                        {% if entry.rate_without_tax > 0 %}
+                            <span class="text-info">PKR {{ entry.rate_without_tax|floatformat:2 }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    {% endif %}
+                </td>
+                <td class="text-end">
+                    {% if entry.is_bf_row %}—{% else %}
+                        {% if entry.tax_per_m3 > 0 %}
+                            <span class="text-danger">PKR {{ entry.tax_per_m3|floatformat:2 }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    {% endif %}
+                </td>
+                <td class="text-end">
+                    {% if entry.is_bf_row %}—{% else %}
+                        {% if entry.rate_with_tax_per_m3 > 0 %}
+                            <span class="text-success">PKR {{ entry.rate_with_tax_per_m3|floatformat:2 }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    {% endif %}
+                </td>
+                <td class="text-end">{% if entry.is_bf_row %}—{% else %}<span class="text-primary fw-bold">PKR {{ entry.total_amount|floatformat:2 }}</span>{% endif %}</td>
+                <td class="text-end">{% if entry.is_bf_row %}—{% else %}<span class="text-success">PKR {{ entry.paid_amount|floatformat:2 }}</span>{% endif %}</td>
+                <td class="text-end">
+                    {% if entry.is_bf_row %}—{% else %}
+                    <span class="fw-bold {% if entry.balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                        PKR {{ entry.balance|floatformat:2 }}
+                    </span>
+                    {% endif %}
+                </td>
+                <td class="text-end text-warning">{% if entry.is_bf_row %}—{% else %}PKR {{ entry.extra_charges|floatformat:2 }}{% endif %}</td>
+                {% endif %}
+                
+                <td>
+                    {% if entry.is_bf_row %}
+                        <span class="text-muted fst-italic">Opening Balance</span>
+                    {% else %}
+                        {% if entry.description %}
+                            <span class="badge bg-warning text-dark">{{ entry.description }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    {% if not entry.is_bf_row and entry.id %}
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-sm btn-warning btn-ledger-edit-purchase" data-entry-id="{{ entry.id }}" onclick="openLedgerPurchaseEdit('{{ entry.id }}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger btn-ledger-delete-purchase" data-entry-id="{{ entry.id }}" onclick="deleteLedgerPurchase('{{ entry.id }}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot class="table-dark">
+            <tr>
+                <td colspan="7"><strong>TOTAL</strong></td>
+                {% if ledger_entries %}
+                    {% if ledger_entries.0.is_argon %}
+                    <td class="text-center"><strong>{{ total_m3|floatformat:2 }}</strong></td>
+                    <td class="text-center"><strong>{{ total_cylinders }}</strong></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td class="text-end"><strong>PKR {{ total_amount|floatformat:2 }}</strong></td>
+                    <td class="text-end"><strong>PKR {{ total_paid|floatformat:2 }}</strong></td>
+                    <td class="text-end"><strong>PKR {{ final_balance|floatformat:2 }}</strong></td>
+                    <td class="text-end"><strong>PKR {{ total_extra_charges|floatformat:2 }}</strong></td>
+                    {% elif ledger_entries.0.is_lpg %}
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td class="text-end"><strong>{{ total_cylinders }}</strong></td>
+                    <td class="text-end"><strong>PKR {{ total_amount|floatformat:2 }}</strong></td>
+                    <td class="text-end"><strong>PKR {{ total_paid|floatformat:2 }}</strong></td>
+                    <td class="text-end"><strong>PKR {{ final_balance|floatformat:2 }}</strong></td>
+                    <td class="text-end"><strong>PKR {{ total_extra_charges|floatformat:2 }}</strong></td>
+                    {% else %}
+                    <td><strong>{{ total_quantity|floatformat:2 }}</strong></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td class="text-end"><strong>PKR {{ total_amount|floatformat:2 }}</strong></td>
+                    <td class="text-end"><strong>PKR {{ total_paid|floatformat:2 }}</strong></td>
+                    <td class="text-end"><strong>PKR {{ final_balance|floatformat:2 }}</strong></td>
+                    <td class="text-end"><strong>PKR {{ total_extra_charges|floatformat:2 }}</strong></td>
+                    {% endif %}
+                {% else %}
+                <td colspan="10"></td>
+                {% endif %}
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+    {% endif %}
+</div>
+        
+        <!-- Summary Cards -->
+        <div class="row mt-3">
+            <div class="col-md-3">
+                <div class="card bg-light">
+                    <div class="card-body text-center p-2">
+                        <h6 class="text-muted">Total Purchases</h6>
+                        <h4 class="mb-0 text-primary">PKR {{ total_amount|floatformat:2 }}</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-light">
+                    <div class="card-body text-center p-2">
+                        <h6 class="text-muted">Total Paid</h6>
+                        <h4 class="mb-0 text-success">PKR {{ total_paid|floatformat:2 }}</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-light">
+                    <div class="card-body text-center p-2">
+                        <h6 class="text-muted">Total Extra Charges</h6>
+                        <h4 class="mb-0 text-warning">PKR {{ total_extra_charges|floatformat:2 }}</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-light">
+                    <div class="card-body text-center p-2">
+                        <h6 class="text-muted">Current Balance</h6>
+                        <h4 class="mb-0 {% if final_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                            PKR {{ final_balance|floatformat:2 }}
+                        </h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {% if is_argon %}
+        <!-- Argon Summary Cards -->
+        <div class="row mt-2">
+            <div class="col-md-4">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center p-2">
+                        <h6 class="text-white">Total M³</h6>
+                        <h4 class="mb-0">{{ total_m3|floatformat:2 }}</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center p-2">
+                        <h6 class="text-white">Total Cylinders</h6>
+                        <h4 class="mb-0">{{ total_cylinders }}</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center p-2">
+                        <h6 class="text-white">Avg M³/Cylinder</h6>
+                        <h4 class="mb-0">
+                            {% if total_cylinders > 0 %}
+                                {{ avg_m3_per_cylinder|floatformat:2 }}
+                            {% else %}
+                                0.00
+                            {% endif %}
+                        </h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if is_lpg %}
+        <!-- LPG Summary Cards -->
+        <div class="row mt-2">
+            <div class="col-md-4">
+                <div class="card bg-warning text-dark">
+                    <div class="card-body text-center p-2">
+                        <h6 class="text-dark">Total Cylinders</h6>
+                        <h4 class="mb-0">{{ total_cylinders }}</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-warning text-dark">
+                    <div class="card-body text-center p-2">
+                        <h6 class="text-dark">Total Weight (KG)</h6>
+                        <h4 class="mb-0">{{ total_quantity|floatformat:0 }} kg</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-warning text-dark">
+                    <div class="card-body text-center p-2">
+                        <h6 class="text-dark">Avg Rate/Cylinder</h6>
+                        <h4 class="mb-0">
+                            {% if total_cylinders > 0 and total_amount > 0 %}
+                                PKR {{ total_amount|floatformat:2 }}
+                            {% else %}
+                                PKR 0.00
+                            {% endif %}
+                        </h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info mt-4">
+    <i class="fas fa-info-circle me-2"></i>
+    No purchases found for <strong>{{ product_name }}</strong> from <strong>{{ supplier_name }}</strong>
+    {% if start_date or end_date %}in the selected date range{% endif %}.
+</div>
+{% endif %}
+{% endwith %}
+{% endfor %}
+
+</div>
+
+<!-- Ledger purchase edit modal -->
+<div class="modal fade" id="editPurchaseModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Purchase in Ledger</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editPurchaseForm">
+                    <input type="hidden" id="edit_entry_id">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Supplier</label>
+                            <select id="edit_supplier_id" class="form-select">
+                                <option value="">-- Select Supplier --</option>
+                                {% for supplier in suppliers %}<option value="{{ supplier.id }}">{{ supplier.name }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Product</label>
+                            <select id="edit_product_id" class="form-select">
+                                <option value="">-- Select Product --</option>
+                                {% for product in products %}<option value="{{ product.id }}">{{ product.name }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Qty</label>
+                            <input type="number" id="edit_quantity" class="form-control" step="0.01" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Taxable Qty</label>
+                            <input type="number" id="edit_taxable_qty" class="form-control" step="0.01" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Unit Price</label>
+                            <input type="number" id="edit_unit_price" class="form-control" step="0.01" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Delivery Charges</label>
+                            <input type="number" id="edit_delivery_charges" class="form-control" step="0.01" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Paid Amount</label>
+                            <input type="number" id="edit_paid_amount" class="form-control" step="0.01" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Payment Type</label>
+                            <select id="edit_payment_type" class="form-select">
+                                <option value="cash">Cash</option>
+                                <option value="transfer">Bank Transfer</option>
+                                <option value="cheque">Cheque</option>
+                                <option value="online">Online</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Tax Type</label>
+                            <select id="edit_tax_type" class="form-select">
+                                <option value="none">Without Sales Tax</option>
+                                <option value="with_tax">With Sales Tax</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Tax Rate (%)</label>
+                            <input type="number" id="edit_sales_tax_rate" class="form-control" step="0.01" min="0">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Invoice No</label>
+                            <input type="text" id="edit_invoice_no" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Purchase Date</label>
+                            <input type="date" id="edit_purchase_date" class="form-control">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold">Description</label>
+                            <input type="text" id="edit_description" class="form-control">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveLedgerPurchaseEdit()">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function deleteLedgerPurchase(entryId) {
+        if (!confirm('Delete this supplier ledger purchase?')) return;
+        fetch('/suppliers/api/delete-purchase/', {
+            method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
+            body: JSON.stringify({entry_id: entryId})
+        }).then(r => r.json()).then(result => {
+            if (result.success) location.reload(); else alert(result.error || 'Delete failed');
+        });
+    }
+
+    function openLedgerPurchaseEdit(entryId) {
+        document.getElementById('edit_entry_id').value = entryId;
+        fetch(`/suppliers/api/get-purchase-details/?id=${entryId}`)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('edit_supplier_id').value = data.supplier_id || '';
+                document.getElementById('edit_product_id').value = data.product_id || '';
+                document.getElementById('edit_quantity').value = data.quantity || 0;
+                document.getElementById('edit_taxable_qty').value = data.taxable_qty || 0;
+                document.getElementById('edit_unit_price').value = data.unit_price || 0;
+                document.getElementById('edit_delivery_charges').value = data.delivery_charges || 0;
+                document.getElementById('edit_paid_amount').value = data.paid_amount || 0;
+                document.getElementById('edit_payment_type').value = data.payment_type || 'cash';
+                document.getElementById('edit_tax_type').value = data.tax_type || 'none';
+                document.getElementById('edit_sales_tax_rate').value = data.sales_tax_rate || 0;
+                document.getElementById('edit_invoice_no').value = data.invoice_no || '';
+                document.getElementById('edit_purchase_date').value = data.purchase_date || '';
+                document.getElementById('edit_description').value = data.description || '';
+                const modal = new bootstrap.Modal(document.getElementById('editPurchaseModal'));
+                modal.show();
+            });
+    }
+
+    function saveLedgerPurchaseEdit() {
+        const entryId = document.getElementById('edit_entry_id').value;
+        const payload = {
+            supplier_id: document.getElementById('edit_supplier_id').value,
+            product_id: document.getElementById('edit_product_id').value,
+            quantity: parseFloat(document.getElementById('edit_quantity').value) || 0,
+            taxable_qty: parseFloat(document.getElementById('edit_taxable_qty').value) || 0,
+            unit_price: parseFloat(document.getElementById('edit_unit_price').value) || 0,
+            delivery_charges: parseFloat(document.getElementById('edit_delivery_charges').value) || 0,
+            paid_amount: parseFloat(document.getElementById('edit_paid_amount').value) || 0,
+            payment_type: document.getElementById('edit_payment_type').value,
+            invoice_no: document.getElementById('edit_invoice_no').value || '',
+            purchase_date: document.getElementById('edit_purchase_date').value || '',
+            description: document.getElementById('edit_description').value || '',
+            tax_type: document.getElementById('edit_tax_type').value,
+            sales_tax_rate: parseFloat(document.getElementById('edit_sales_tax_rate').value) || 0,
+        };
+        fetch('/suppliers/api/update-purchase/', {
+            method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
+            body: JSON.stringify({entry_id: entryId, data: payload})
+        }).then(r => r.json()).then(result => {
+            if (result.success) location.reload(); else alert(result.error || 'Update failed');
+        });
+    }
+
+    function refreshChoicesSelect(select, optionHtml) {
+        if (!select) return;
+
+        if (select.choices) {
+            try {
+                select.choices.destroy();
+            } catch (error) {
+                console.warn('Choices destroy failed:', error);
+            }
+            delete select.choices;
+        }
+
+        select.dataset.searchEnhanced = 'false';
+        select.removeAttribute('hidden');
+        select.innerHTML = optionHtml;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const supplierSelect = document.querySelector('select[name="supplier"]');
+        const productChecks = document.querySelectorAll('input[name="products"]');
+        const productPickerButton = document.querySelector('.supplier-ledger-product-picker > button');
+        if (!productPickerButton) return;
+
+        supplierSelect.addEventListener('change', function () {
+            productChecks.forEach(function (checkbox) { checkbox.checked = false; });
+            this.form.submit();
+        });
+
+        function updateProductPickerLabel() {
+            const checkedCount = document.querySelectorAll('input[name="products"]:checked').length;
+            productPickerButton.textContent = checkedCount
+                ? `${checkedCount} product(s) selected`
+                : 'Select products';
+        }
+
+        productChecks.forEach(function (checkbox) {
+            checkbox.addEventListener('change', updateProductPickerLabel);
+        });
+        updateProductPickerLabel();
+    });
+</script>
+{% endblock %}

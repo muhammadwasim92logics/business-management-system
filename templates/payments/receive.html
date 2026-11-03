@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }} - GBMS{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-7 col-lg-6 mx-auto">
+        <div class="card form-card">
+            <div class="card-header card-header-gradient">
+                <h5 class="mb-0 d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-hand-holding-usd me-2"></i>Receive Payment</span>
+                    <span class="badge bg-light text-dark"><i class="fas fa-wallet me-1"></i>Customer Payment</span>
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                {% if selected_customer %}
+                <!-- Customer Info Card -->
+                <div class="customer-balance-card mb-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong class="fs-6 text-dark"><i class="fas fa-user text-primary me-2"></i>{{ selected_customer.name }}</strong>
+                            <span class="badge bg-secondary ms-2">{{ selected_customer.customer_code }}</span>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block text-end">Current Balance</small>
+                            <span class="fw-bold fs-6 {% if customer_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                                PKR {{ customer_balance|floatformat:2 }}
+                            </span>
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mt-2">
+                        <i class="fas fa-phone me-1"></i>{{ selected_customer.mobile }}
+                        {% if selected_customer.area %}
+                        | <i class="fas fa-map-marker-alt me-1"></i>{{ selected_customer.area }}
+                        {% endif %}
+                    </small>
+                </div>
+                {% endif %}
+
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label"><i class="fas fa-user text-primary me-1"></i>Customer *</label>
+                        {{ form.customer }}
+                        {% if form.customer.errors %}
+                        <div class="text-danger small mt-1">{{ form.customer.errors.0 }}</div>
+                        {% endif %}
+                        <small class="text-muted">Select the customer making payment</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label"><i class="fas fa-money-bill-wave text-success me-1"></i>Amount (PKR) *</label>
+                        {{ form.amount }}
+                        {% if form.amount.errors %}
+                        <div class="text-danger small mt-1">{{ form.amount.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label"><i class="fas fa-credit-card text-info me-1"></i>Payment Type</label>
+                        {{ form.payment_type }}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label"><i class="fas fa-sticky-note text-secondary me-1"></i>Notes</label>
+                        {{ form.notes }}
+                    </div>
+                    
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-success btn-lg flex-grow-1">
+                            <i class="fas fa-save me-2"></i>Record Payment
+                        </button>
+                        {% if selected_customer %}
+                        <a href="{% url 'customers:detail' selected_customer.pk %}" class="btn btn-outline-secondary btn-lg">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                        {% else %}
+                        <a href="{% url 'payments:list' %}" class="btn btn-outline-secondary btn-lg">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    // Auto-focus on amount field if customer is pre-selected
+    document.addEventListener('DOMContentLoaded', function() {
+        const customerSelect = document.getElementById('id_customer');
+        const amountInput = document.getElementById('id_amount');
+        
+        // If customer is already selected, focus on amount
+        if (customerSelect && customerSelect.value) {
+            amountInput.focus();
+        }
+        
+        // Update balance display when customer changes
+        customerSelect.addEventListener('change', function() {
+            // You can add AJAX to fetch customer balance here
+            const customerId = this.value;
+            if (customerId) {
+                // Show loading or fetch balance
+                console.log('Customer selected:', customerId);
+            }
+        });
+
+        const paymentForm = document.querySelector('form');
+        if (paymentForm) {
+            paymentForm.addEventListener('submit', function(e) {
+                const btn = paymentForm.querySelector('button[type="submit"]');
+                if (btn) {
+                    if (btn.disabled) {
+                        e.preventDefault();
+                        return false;
+                    }
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Recording...';
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
+{% endblock %}

@@ -1,0 +1,736 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Daily Customer Entry - GBMS{% endblock %}
+{% block page_title %}📋 Daily Customer Entry{% endblock %}
+
+{% block content %}
+<!-- Tab Navigation -->
+<ul class="nav nav-tabs mb-4" id="entryTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="add-entry-tab" data-bs-toggle="tab" data-bs-target="#addEntry" type="button" role="tab">
+            <i class="fas fa-plus-circle me-2"></i>Add Entry
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="payment-only-tab" data-bs-toggle="tab" data-bs-target="#paymentOnly" type="button" role="tab">
+            <i class="fas fa-hand-holding-usd me-2"></i>Payment Only
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link" href="{% url 'deliveries:daily_entry' %}">
+            <i class="fas fa-eye me-2"></i>View Entries
+        </a>
+    </li>
+</ul>
+
+<!-- Tab Content -->
+<div class="tab-content" id="entryTabsContent">
+    
+    <!-- ============================================================
+    TAB 1: ADD ENTRY
+    ============================================================ -->
+    <div class="tab-pane fade show active" id="addEntry" role="tabpanel">
+        <div class="card form-card">
+            <div class="card-header card-header-gradient">
+                <h5 class="mb-0 d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-plus-circle me-2"></i>Add New Entry</span>
+                    <span class="badge bg-light text-dark font-normal"><i class="far fa-calendar-alt me-1"></i>Date: {{ today }}</span>
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <form method="post" id="dailyEntryForm" action="{% url 'deliveries:daily_entry_add' %}">
+                    {% csrf_token %}
+                    
+                    <!-- ============================================================
+                    SECTION 1: CUSTOMER INFORMATION
+                    ============================================================ -->
+                    <div class="section-header">
+                        <h6><span class="section-badge">1</span> Customer Information</h6>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label class="form-label">Customer Type</label>
+                                <div class="pill-radio-group">
+                                    <div class="pill-radio-option">
+                                        <input type="radio" name="customer_type" id="existing_customer" value="existing" 
+                                               checked onchange="toggleCustomerType()">
+                                        <label class="pill-radio-label" for="existing_customer">
+                                            <i class="fas fa-user-check"></i>Existing Customer
+                                        </label>
+                                    </div>
+                                    <div class="pill-radio-option">
+                                        <input type="radio" name="customer_type" id="new_customer" value="new" 
+                                               onchange="toggleCustomerType()">
+                                        <label class="pill-radio-label" for="new_customer">
+                                            <i class="fas fa-user-plus"></i>New Customer
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Existing Customer -->
+                    <div id="existingCustomerSection" class="row">
+                        <div class="col-md-12">
+                            <div class="form-group mb-3">
+                                <label class="form-label">Select Customer</label>
+                                <select name="customer_id" id="customer_id" class="form-select" onchange="loadCustomerBalance(this.value)">
+                                    <option value="">-- Select Customer --</option>
+                                    {% for customer in customers %}
+                                    <option value="{{ customer.pk }}">{{ customer.name }} ({{ customer.customer_code }}) - {{ customer.mobile }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- New Customer -->
+                    <div id="newCustomerSection" class="row" style="display: none;">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Customer Name *</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-user"></i></span>
+                                <input type="text" name="name" id="name" class="form-control" placeholder="Full Name">
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Mobile (Optional)</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-phone"></i></span>
+                                <input type="text" name="mobile" id="mobile" class="form-control" placeholder="03XX-XXXXXXX (Optional)">
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Alternate Mobile</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-mobile-alt"></i></span>
+                                <input type="text" name="alternate_mobile" id="alternate_mobile" class="form-control" placeholder="Optional">
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Area</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-map-marker-alt"></i></span>
+                                <input type="text" name="area" id="area" class="form-control" placeholder="City/Area">
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Address</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-home"></i></span>
+                                <input type="text" name="address" id="address" class="form-control" placeholder="Complete address">
+                            </div>
+                        </div>
+                        <div class="col-12 mb-3">
+                            <label class="form-label">Notes</label>
+                            <textarea name="notes" id="notes" class="form-control" rows="2" placeholder="Additional notes"></textarea>
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" name="is_new_customer" id="is_new_customer" value="false">
+                    
+                    <!-- Customer Balance Alert -->
+                    <div id="customerBalanceAlert" class="customer-balance-card mb-4" style="display: none;">
+                        <strong class="text-success"><i class="fas fa-wallet me-1"></i>Customer Balance:</strong>
+                        <span id="balanceDisplay" class="ms-2 fw-bold">Loading...</span>
+                    </div>
+                    
+                    <!-- ============================================================
+                    SECTION 2: PRODUCTS
+                    ============================================================ -->
+                    <div class="section-header mt-4">
+                        <h6><span class="section-badge">2</span> Products & Cylinders</h6>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover align-middle" id="productsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 25%;">Product</th>
+                                    <th style="width: 15%;">Quantity (Taken)</th>
+                                    <th style="width: 15%;">Empty Returned</th>
+                                    <th style="width: 20%;">Unit Price (PKR)</th>
+                                    <th style="width: 15%;">Total (PKR)</th>
+                                    <th style="width: 10%;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <select name="product_ids[]" class="form-select product-select" onchange="updateProductPrice(this)">
+                                            <option value="">-- Select --</option>
+                                            {% for product in products %}
+                                            <option value="{{ product.pk }}" data-price="{{ product.unit_price }}">
+                                                {{ product.name }} (Stock: {{ product.stock_quantity }})
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input type="number" name="quantities[]" class="form-control quantity" 
+                                               min="0" step="1" onchange="calculateRowTotal(this)">
+                                    </td>
+                                    <td>
+                                        <input type="number" name="empty_returns[]" class="form-control empty-return" 
+                                               min="0" step="1" value="0">
+                                    </td>
+                                    <td>
+                                        <input type="number" name="product_prices[]" class="form-control product-price" 
+                                               step="0.01" min="0" onchange="calculateRowTotal(this)">
+                                    </td>
+                                    <td>
+                                        <input type="text" class="form-control row-total fw-bold text-success" readonly value="0.00">
+                                    </td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeRow(this)">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="4" class="text-end"><strong>Total Amount:</strong></td>
+                                    <td colspan="2">
+                                        <input type="text" id="grandTotal" class="form-control fw-bold text-primary" 
+                                               readonly value="0.00" style="font-size: 1.15rem; background-color: #f8fafc;">
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    
+                    <div class="text-center my-3 gap-2 d-flex justify-content-center">
+                        <button type="button" class="btn btn-success btn-sm" onclick="addProductRow()">
+                            <i class="fas fa-plus me-1"></i>Add Product
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearProducts()">
+                            <i class="fas fa-trash me-1"></i>Clear All
+                        </button>
+                    </div>
+                    
+                    <!-- ============================================================
+                    SECTION 3: PAYMENT
+                    ============================================================ -->
+                    <div class="section-header mt-4">
+                        <h6><span class="section-badge">3</span> Payment Details</h6>
+                    </div>
+                    
+                    <div class="row align-items-center">
+                        <div class="col-md-4 mb-3">
+                            <div class="p-2 border rounded bg-light">
+                                <div class="form-check">
+                                    <input type="checkbox" name="payment_made" id="payment_made" class="form-check-input" 
+                                           onchange="togglePaymentFields()">
+                                    <label class="form-check-label fw-bold cursor-pointer" for="payment_made">
+                                        <i class="fas fa-check-circle text-success me-1"></i> Payment Made
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Payment Amount</label>
+                            <div class="input-group">
+                                <span class="input-group-text">PKR</span>
+                                <input type="number" name="payment_amount" id="payment_amount" class="form-control" 
+                                       step="0.01" min="0" placeholder="0.00" disabled>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Payment Type</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-credit-card"></i></span>
+                                <select name="payment_type" id="payment_type" class="form-select" disabled>
+                                    <option value="cash">Cash</option>
+                                    <option value="transfer">Bank Transfer</option>
+                                    <option value="upi">UPI / Online</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Summary Card -->
+                    <div class="customer-balance-card mt-3">
+                        <div class="row text-center g-2">
+                            <div class="col-6 col-md-3">
+                                <small class="text-muted d-block">Products</small>
+                                <span id="totalProducts" class="fw-bold text-dark fs-6">0</span>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <small class="text-muted d-block">Cylinders</small>
+                                <span id="totalCylinders" class="fw-bold text-dark fs-6">0</span>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <small class="text-muted d-block">Total Amount</small>
+                                <span class="fw-bold text-primary fs-6">PKR <span id="displayTotal">0.00</span></span>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <small class="text-muted d-block">Empty Returned</small>
+                                <span id="totalEmpty" class="fw-bold text-success fs-6">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Form Actions -->
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-save me-2"></i>Save Entry
+                        </button>
+                        <a href="{% url 'deliveries:daily_entry' %}" class="btn btn-secondary btn-lg">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ============================================================
+    TAB 2: PAYMENT ONLY
+    ============================================================ -->
+    <div class="tab-pane fade" id="paymentOnly" role="tabpanel">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-hand-holding-usd me-2"></i>
+                    Payment Only
+                    <small class="float-end text-light">Record payment without any products</small>
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" id="paymentOnlyForm" action="{% url 'deliveries:payment_only' %}">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Select Customer *</label>
+                                <select name="customer_id" id="payment_customer_id" class="form-select" 
+                                        onchange="loadPaymentCustomerBalance(this.value)" required>
+                                    <option value="">-- Select Customer --</option>
+                                    {% for customer in customers %}
+                                    <option value="{{ customer.pk }}">{{ customer.name }} ({{ customer.customer_code }}) - {{ customer.mobile }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Payment Type</label>
+                                <select name="payment_type" id="payment_type_only" class="form-select">
+                                    <option value="cash">Cash</option>
+                                    <option value="transfer">Bank Transfer</option>
+                                    <option value="upi">UPI</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Customer Balance Display -->
+                    <div id="paymentCustomerBalance" class="alert alert-info" style="display: none;">
+                        <strong>Customer Balance:</strong>
+                        <span id="paymentBalanceInfo">Loading...</span>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Payment Amount (PKR) *</label>
+                                <input type="number" name="payment_amount" id="payment_amount_only" class="form-control" 
+                                       step="0.01" min="0.01" placeholder="Enter amount" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Notes</label>
+                                <input type="text" name="notes" id="payment_notes" class="form-control" 
+                                       placeholder="Optional notes">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex gap-2 mt-3">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-save me-2"></i>Record Payment
+                        </button>
+                        <a href="{% url 'deliveries:daily_entry' %}" class="btn btn-secondary btn-lg">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // ============================================================
+    // TOGGLE CUSTOMER TYPE
+    // ============================================================
+    function toggleCustomerType() {
+        const isExisting = document.querySelector('input[name="customer_type"]:checked').value === 'existing';
+        
+        document.getElementById('existingCustomerSection').style.display = isExisting ? 'flex' : 'none';
+        document.getElementById('newCustomerSection').style.display = isExisting ? 'none' : 'flex';
+        document.getElementById('is_new_customer').value = isExisting ? 'false' : 'true';
+        
+        document.getElementById('customer_id').disabled = !isExisting;
+        document.getElementById('name').disabled = isExisting;
+        document.getElementById('mobile').disabled = isExisting;
+        document.getElementById('alternate_mobile').disabled = isExisting;
+        document.getElementById('area').disabled = isExisting;
+        document.getElementById('address').disabled = isExisting;
+        document.getElementById('notes').disabled = isExisting;
+        
+        if (!isExisting) {
+            document.getElementById('customerBalanceAlert').style.display = 'none';
+        }
+    }
+    
+    // ============================================================
+    // LOAD CUSTOMER BALANCE (For Add Entry)
+    // ============================================================
+    function loadCustomerBalance(customerId) {
+        if (!customerId) {
+            document.getElementById('customerBalanceAlert').style.display = 'none';
+            return;
+        }
+        
+        const alertDiv = document.getElementById('customerBalanceAlert');
+        const balanceDisplay = document.getElementById('balanceDisplay');
+        
+        alertDiv.style.display = 'block';
+        balanceDisplay.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+        
+        fetch(`/deliveries/daily/get-customer-balance/?customer_id=${customerId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    balanceDisplay.innerHTML = `<span class="text-danger">${data.error}</span>`;
+                    return;
+                }
+                
+                const outstanding = data.outstanding;
+                let statusClass = 'text-success';
+                let statusIcon = '✅';
+                let statusText = 'No balance';
+                
+                if (outstanding > 0) {
+                    statusClass = 'text-danger';
+                    statusIcon = '⚠️';
+                    statusText = 'Outstanding balance';
+                } else if (outstanding < 0) {
+                    statusClass = 'text-success';
+                    statusIcon = '💰';
+                    statusText = 'Advance balance';
+                }
+                
+                balanceDisplay.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>${data.customer_name}</strong>
+                            <br><small class="text-muted">${data.customer_code}</small>
+                        </div>
+                        <div class="col-md-3">
+                            <span class="${statusClass}">${statusIcon} ${statusText}</span>
+                            <br><strong>PKR ${Math.abs(outstanding).toFixed(2)}</strong>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Total Billed</small>
+                            <br><strong>PKR ${data.total_billed.toFixed(2)}</strong>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Total Paid</small>
+                            <br><strong>PKR ${data.total_paid.toFixed(2)}</strong>
+                        </div>
+                    </div>
+                `;
+                
+                if (outstanding > 0) {
+                    const paymentAmount = document.getElementById('payment_amount');
+                    if (!paymentAmount.value || parseFloat(paymentAmount.value) === 0) {
+                        paymentAmount.placeholder = `Suggested: ${outstanding.toFixed(2)}`;
+                    }
+                }
+            })
+            .catch(error => {
+                balanceDisplay.innerHTML = '<span class="text-danger">Error loading balance</span>';
+            });
+    }
+    
+    // ============================================================
+    // LOAD PAYMENT CUSTOMER BALANCE (For Payment Only)
+    // ============================================================
+    function loadPaymentCustomerBalance(customerId) {
+        if (!customerId) {
+            document.getElementById('paymentCustomerBalance').style.display = 'none';
+            return;
+        }
+        
+        const alertDiv = document.getElementById('paymentCustomerBalance');
+        const balanceInfo = document.getElementById('paymentBalanceInfo');
+        
+        alertDiv.style.display = 'block';
+        balanceInfo.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+        
+        fetch(`/deliveries/daily/get-customer-balance/?customer_id=${customerId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    balanceInfo.innerHTML = `<span class="text-danger">${data.error}</span>`;
+                    return;
+                }
+                
+                const outstanding = data.outstanding;
+                let statusHtml = '';
+                
+                if (outstanding > 0) {
+                    statusHtml = `
+                        <div class="text-danger">
+                            <strong>⚠️ Outstanding Balance: PKR ${outstanding.toFixed(2)}</strong>
+                            <br><small>Customer owes this amount</small>
+                        </div>
+                    `;
+                } else if (outstanding < 0) {
+                    statusHtml = `
+                        <div class="text-success">
+                            <strong>💰 Advance Balance: PKR ${Math.abs(outstanding).toFixed(2)}</strong>
+                            <br><small>Customer has advance payment</small>
+                        </div>
+                    `;
+                } else {
+                    statusHtml = `
+                        <div class="text-success">
+                            <strong>✅ Balance Clear</strong>
+                            <br><small>No outstanding balance</small>
+                        </div>
+                    `;
+                }
+                
+                balanceInfo.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-4">
+                            <strong>${data.customer_name}</strong>
+                            <br><small class="text-muted">${data.customer_code}</small>
+                        </div>
+                        <div class="col-md-4">
+                            ${statusHtml}
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">Total Billed</small>
+                            <br><strong>PKR ${data.total_billed.toFixed(2)}</strong>
+                            <br>
+                            <small class="text-muted">Total Paid</small>
+                            <br><strong>PKR ${data.total_paid.toFixed(2)}</strong>
+                        </div>
+                    </div>
+                `;
+                
+                // Auto-fill payment amount with outstanding if positive
+                if (outstanding > 0) {
+                    const paymentAmount = document.getElementById('payment_amount_only');
+                    if (!paymentAmount.value || parseFloat(paymentAmount.value) === 0) {
+                        paymentAmount.placeholder = `Suggested: ${outstanding.toFixed(2)}`;
+                        paymentAmount.value = outstanding.toFixed(2);
+                    }
+                }
+            })
+            .catch(error => {
+                balanceInfo.innerHTML = '<span class="text-danger">Error loading balance</span>';
+            });
+    }
+    
+    // ============================================================
+    // ADD PRODUCT ROW
+    // ============================================================
+    function addProductRow() {
+        const table = document.getElementById('productsTable').getElementsByTagName('tbody')[0];
+        const newRow = table.insertRow();
+        
+        const productSelects = document.querySelectorAll('.product-select');
+        const firstSelect = productSelects[0];
+        const optionsHTML = firstSelect.innerHTML;
+        
+        newRow.innerHTML = `
+            <td>
+                <select name="product_ids[]" class="form-select product-select" onchange="updateProductPrice(this)">
+                    ${optionsHTML}
+                </select>
+            </td>
+            <td>
+                <input type="number" name="quantities[]" class="form-control quantity" 
+                       min="0" step="1" onchange="calculateRowTotal(this)">
+            </td>
+            <td>
+                <input type="number" name="empty_returns[]" class="form-control empty-return" 
+                       min="0" step="1" value="0">
+            </td>
+            <td>
+                <input type="number" name="product_prices[]" class="form-control product-price" 
+                       step="0.01" min="0" onchange="calculateRowTotal(this)">
+            </td>
+            <td>
+                <input type="text" class="form-control row-total" readonly value="0.00">
+            </td>
+            <td class="text-center">
+                <button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </td>
+        `;
+        
+        updateSummary();
+    }
+    
+    // ============================================================
+    // REMOVE ROW
+    // ============================================================
+    function removeRow(button) {
+        const row = button.closest('tr');
+        const tbody = row.parentNode;
+        if (tbody.rows.length > 1) {
+            row.remove();
+            updateSummary();
+        } else {
+            alert('You must keep at least one product row.');
+        }
+    }
+    
+    // ============================================================
+    // CLEAR ALL PRODUCTS
+    // ============================================================
+    function clearProducts() {
+        if (confirm('Clear all products?')) {
+            const rows = document.querySelectorAll('#productsTable tbody tr');
+            rows.forEach((row, index) => {
+                if (index > 0) {
+                    row.remove();
+                } else {
+                    row.querySelector('.product-select').value = '';
+                    row.querySelector('.quantity').value = '';
+                    row.querySelector('.empty-return').value = '0';
+                    row.querySelector('.product-price').value = '';
+                    row.querySelector('.row-total').value = '0.00';
+                }
+            });
+            updateSummary();
+        }
+    }
+    
+    // ============================================================
+    // CALCULATE ROW TOTAL
+    // ============================================================
+    function calculateRowTotal(element) {
+        const row = element.closest('tr');
+        const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
+        const price = parseFloat(row.querySelector('.product-price').value) || 0;
+        const total = quantity * price;
+        row.querySelector('.row-total').value = total.toFixed(2);
+        updateSummary();
+    }
+    
+    // ============================================================
+    // UPDATE PRODUCT PRICE
+    // ============================================================
+    function updateProductPrice(select) {
+        const row = select.closest('tr');
+        const price = select.options[select.selectedIndex].getAttribute('data-price') || 0;
+        row.querySelector('.product-price').value = price;
+        calculateRowTotal(row.querySelector('.product-price'));
+    }
+    
+    // ============================================================
+    // UPDATE SUMMARY
+    // ============================================================
+    function updateSummary() {
+        const rows = document.querySelectorAll('#productsTable tbody tr');
+        let totalAmount = 0;
+        let totalCylinders = 0;
+        let totalEmpty = 0;
+        let productCount = 0;
+        
+        rows.forEach(row => {
+            const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
+            const emptyReturn = parseFloat(row.querySelector('.empty-return').value) || 0;
+            const price = parseFloat(row.querySelector('.product-price').value) || 0;
+            const total = quantity * price;
+            
+            totalAmount += total;
+            totalCylinders += quantity;
+            totalEmpty += emptyReturn;
+            
+            if (quantity > 0) productCount++;
+        });
+        
+        document.getElementById('grandTotal').value = totalAmount.toFixed(2);
+        document.getElementById('displayTotal').textContent = totalAmount.toFixed(2);
+        document.getElementById('totalProducts').textContent = productCount;
+        document.getElementById('totalCylinders').textContent = totalCylinders;
+        document.getElementById('totalEmpty').textContent = totalEmpty;
+        
+        const paymentAmount = document.getElementById('payment_amount');
+        if (!paymentAmount.value || parseFloat(paymentAmount.value) === 0) {
+            paymentAmount.placeholder = totalAmount.toFixed(2);
+        }
+    }
+    
+    // ============================================================
+    // TOGGLE PAYMENT FIELDS
+    // ============================================================
+    function togglePaymentFields() {
+        const isChecked = document.getElementById('payment_made').checked;
+        document.getElementById('payment_amount').disabled = !isChecked;
+        document.getElementById('payment_type').disabled = !isChecked;
+        
+        if (isChecked) {
+            document.getElementById('payment_amount').focus();
+            const total = parseFloat(document.getElementById('grandTotal').value) || 0;
+            if (!document.getElementById('payment_amount').value) {
+                document.getElementById('payment_amount').value = total.toFixed(2);
+            }
+        }
+    }
+    
+    // ============================================================
+    // INITIALIZE
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        toggleCustomerType();
+        updateSummary();
+    });
+</script>
+
+<style>
+    .section-header h6 {
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+    .section-header hr {
+        margin-top: 0.25rem;
+    }
+    #productsTable tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+    .btn-lg {
+        padding: 0.75rem 2rem;
+        font-size: 1.1rem;
+    }
+    .nav-tabs .nav-link {
+        font-weight: 600;
+        color: #6b7280;
+    }
+    .nav-tabs .nav-link.active {
+        color: #059669;
+        border-bottom: 3px solid #059669;
+    }
+    .nav-tabs .nav-link:hover {
+        color: #047857;
+    }
+</style>
+{% endblock %}

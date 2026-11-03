@@ -1,0 +1,3702 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Daily Entry - GBMS{% endblock %}
+{% block page_title %}📋 Daily Customer Entry{% endblock %}
+
+{% block extra_css %}
+<style>
+    .daily-filter-dropdown .dropdown-menu { min-width: 290px; padding: .55rem; }
+    .daily-filter-dropdown .form-check { padding: .45rem .5rem .45rem 2rem; border-radius: 6px; }
+    .daily-filter-dropdown .form-check:hover { background: var(--primary-50); }
+    .daily-filter-dropdown .form-check-label { cursor: pointer; width: 100%; }
+    .daily-entry-error-modal { border: 0; border-radius: 16px; overflow: hidden; box-shadow: 0 1rem 3rem rgba(15, 23, 42, .25); }
+    .daily-entry-error-modal .modal-header { border-bottom: 1px solid #fee2e2; background: #fff7f7; padding: 1.25rem 1.5rem; }
+    .daily-entry-error-modal .modal-body { padding: 1.5rem; }
+    .daily-entry-error-icon { display: grid; place-items: center; width: 46px; height: 46px; flex: 0 0 46px; border-radius: 50%; color: #b91c1c; background: #fee2e2; font-size: 1.2rem; }
+    .daily-entry-error-summary { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin-bottom: 1rem; }
+    .daily-entry-error-detail { min-width: 0; padding: .8rem .9rem; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; }
+    .daily-entry-error-label { display: block; margin-bottom: .25rem; color: #64748b; font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .daily-entry-error-detail strong { display: block; overflow-wrap: anywhere; color: #0f172a; }
+    .daily-entry-error-reason { padding: 1rem; border-left: 4px solid #dc2626; border-radius: 8px; background: #fff1f2; color: #7f1d1d; }
+    @media (max-width: 576px) { .daily-entry-error-summary { grid-template-columns: 1fr; } }
+    @media print {
+        @page { size: A3 landscape; margin: 8mm; }
+        .daily-entry-actions, .daily-entry-form-panel, .daily-payment-panel,
+        .daily-print-button, .global-back-button, .sidebar, .btn-toolbar,
+        .main-content > .d-flex:first-child { display: none !important; }
+        .main-content { width: 100% !important; margin: 0 !important; padding: 0 !important; }
+        .daily-report-panel { border: 1px solid #999 !important; box-shadow: none !important; }
+        .daily-report-panel .card-header { background: #e5e7eb !important; color: #000 !important; }
+        .daily-report-panel .card-header h5 { color: #000 !important; }
+        .daily-report-panel .table-scroll-wrapper,
+        .daily-report-panel .table-scroll-container { max-height: none !important; overflow: visible !important; }
+        .daily-entry-table { width: 100% !important; min-width: 0 !important; table-layout: auto !important; font-size: 7.5pt !important; }
+        .daily-entry-table th, .daily-entry-table td {
+            width: auto !important; min-width: 0 !important; max-width: none !important;
+            padding: 3px 4px !important; white-space: nowrap !important;
+            word-break: normal !important; overflow-wrap: normal !important;
+        }
+        .daily-entry-table .col-calc, .daily-entry-table .col-return,
+        .daily-entry-table .col-desc { white-space: normal !important; max-width: 95px !important; }
+        .daily-entry-table .col-customer { min-width: 90px !important; }
+        .daily-entry-table .col-item { min-width: 75px !important; }
+        .daily-entry-table .col-invoice { min-width: 65px !important; }
+        .daily-entry-table .col-actions { display: none !important; }
+        .daily-entry-table .badge { color: #000 !important; background: transparent !important; border: 0 !important; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ============================================================
+SECTION 1: DATE FILTER AND VIEW ENTRIES (TOP)
+============================================================ -->
+<div class="card mb-4 daily-report-panel">
+    <div class="card-header bg-success text-white">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 class="mb-0">
+                <i class="fas fa-list me-2"></i>
+                Entries for {{ selected_date|date:'d M Y' }}
+                {% if selected_date != today %}
+                <span class="badge bg-warning text-dark ms-2">Past Date</span>
+                {% endif %}
+            </h5>
+            <form method="get" class="d-flex gap-2 align-items-center daily-entry-actions">
+                <input type="date" name="date" class="form-control form-control-sm" value="{{ selected_date|date:'Y-m-d' }}">
+                <div class="dropdown daily-filter-dropdown" data-bs-auto-close="outside">
+                    <button type="button" class="btn btn-light btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fas fa-filter me-1"></i>Filters
+                        <span id="dailyFilterCount" class="badge bg-primary ms-1">{{ transaction_filters|length }}</span>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end">
+                        <div class="small text-muted px-2 pb-2">Select one or more categories</div>
+                        {% for value, label in transaction_filter_choices %}
+                        {% if value %}
+                        <label class="form-check mb-0">
+                            <input class="form-check-input daily-filter-checkbox" type="checkbox" name="transaction_filter" value="{{ value }}" {% if value in transaction_filters %}checked{% endif %}>
+                            <span class="form-check-label">{{ label }}</span>
+                        </label>
+                        {% endif %}
+                        {% endfor %}
+                        <div class="border-top mt-2 pt-2 d-flex justify-content-between gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="clearDailyFilters">Clear</button>
+                            <button type="submit" class="btn btn-sm btn-primary">Apply filters</button>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-light btn-sm">
+                    <i class="fas fa-search me-1"></i>View
+                </button>
+            </form>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if transaction_filters %}
+        <div class="alert alert-info py-2 px-3 mb-3 daily-entry-actions">
+            <i class="fas fa-filter me-1"></i>
+            <strong>Active filters:</strong>
+            {% for value, label in transaction_filter_choices %}{% if value in transaction_filters %}<span class="badge bg-info text-dark ms-1">{{ label }}</span>{% endif %}{% endfor %}
+            <a href="?date={{ selected_date|date:'Y-m-d' }}" class="float-end text-decoration-none">Clear filter</a>
+        </div>
+        {% endif %}
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 daily-entry-actions">
+            <div>
+                <a href="?date={{ prev_date|date:'Y-m-d' }}{% if transaction_filter_query %}&{{ transaction_filter_query }}{% endif %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-chevron-left me-1"></i>{{ prev_date|date:'d M' }}
+                </a>
+                <a href="?date={{ next_date|date:'Y-m-d' }}{% if transaction_filter_query %}&{{ transaction_filter_query }}{% endif %}" class="btn btn-outline-secondary btn-sm {% if not has_next %}disabled{% endif %}">
+                    {{ next_date|date:'d M' }}<i class="fas fa-chevron-right ms-1"></i>
+                </a>
+                {% if selected_date != today %}
+                <a href="?date={{ today|date:'Y-m-d' }}{% if transaction_filter_query %}&{{ transaction_filter_query }}{% endif %}" class="btn btn-outline-primary btn-sm ms-2">
+                    <i class="fas fa-calendar-day me-1"></i>Go to Today
+                </a>
+                {% endif %}
+            </div>
+            <span class="text-muted">Select a date and transaction category to narrow the entries shown.</span>
+        </div>
+
+
+
+<!-- ============================================================
+ENTRIES TABLE - WITH FIXED SCROLLING
+============================================================ -->
+{% if activities %}
+<div class="table-scroll-wrapper">
+    <div class="table-scroll-container">
+        <table class="table table-hover table-bordered table-sm daily-entry-table">
+            <thead>
+                <tr>
+                    <th class="col-id">#</th>
+                    <th class="col-invoice">Invoice</th>
+                    <th class="col-customer">Customer</th>
+                    <th class="col-item">Item</th>
+                    <th class="col-empty text-center">Empty<br>(MT)</th>
+                    <th class="col-full text-center">Full<br>(Fill)</th>
+                    <th class="col-sale text-center">Sale<br>Qty</th>
+                    <th class="col-rate text-end">Rate</th>
+                    <th class="col-total-before text-end">Total Before Delivery Charges</th>
+                    <th class="col-delivery text-end">Delivery<br>Charges</th>
+                    <th class="col-damage text-end">Damage<br>Charges</th>
+                    <th class="col-total-after text-end">Total After Delivery Charges</th>
+                    <th class="col-calc text-start">Calculation<br>Details</th>
+                    <th class="col-return text-start">Cylinder /<br>Return Details</th>
+                    <th class="col-payment text-end">Payment<br>Received</th>
+                    <th class="col-prev-balance text-end">Previous<br>Balance</th>
+                    <th class="col-now-balance text-end">Now<br>Balance</th>
+                    <th class="col-old-cyl text-start">Old<br>Cylinders</th>
+                    <th class="col-new-cyl text-start">New<br>Cylinders</th>
+                    <th class="col-desc text-start">Description</th>
+                    <th class="col-actions text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for activity in activities %}
+                <tr id="row-{{ activity.id }}">
+                    <td class="col-id">{{ forloop.counter }}</td>
+                    <td class="col-invoice"><small>{{ activity.invoice_no|default:"—" }}</small></td>
+                    <td class="col-customer">
+                        <strong>{{ activity.customer_name }}</strong>
+                        <br><small class="text-muted">{{ activity.customer_code }}</small>
+                    </td>
+                    <td class="col-item">
+                        {% if activity.type == 'delivery' %}
+                            {{ activity.items.0.product }}
+                            {% if activity.items.0.is_quantity_only %}
+                            <span class="badge bg-info text-dark" title="Direct Sale Item">Sale</span>
+                            {% endif %}
+                            {% if activity.items.0.personal_details %}
+                            <span class="badge bg-info">P</span>
+                            {% endif %}
+                            {% if activity.low_pressure_details %}
+                            <span class="badge bg-warning text-dark" title="Low Pressure Cylinders"><i class="fas fa-tachometer-alt me-1"></i>Low Press ({{ activity.low_pressure_details|length }})</span>
+                            {% endif %}
+                            {% if activity.full_returned > 0 %}
+                            <span class="badge bg-info text-dark" title="Full Cylinders Returned by Customer"><i class="fas fa-undo me-1"></i>Full Return: {{ activity.full_returned }} (PKR {{ activity.full_returned_value|floatformat:0 }})</span>
+                            {% endif %}
+                            {% if activity.has_payment %}
+                            <br><small class="text-success">💳</small>
+                            {% endif %}
+                        {% else %}
+                            <span class="badge bg-info">Payment Only</span>
+                        {% endif %}
+                    </td>
+                    <td class="col-empty text-center">
+                        {% if activity.type == 'delivery' and not activity.items.0.is_quantity_only %}
+                            {{ activity.total_empty|default:"0" }}
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="col-full text-center">
+                        {% if activity.type == 'delivery' and not activity.items.0.is_quantity_only %}
+                            {{ activity.total_quantity|default:"0" }}
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="col-sale text-center">
+                        {% if activity.type == 'delivery' and activity.items.0.is_quantity_only %}
+                            <span class="badge bg-primary">{{ activity.total_quantity }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="col-rate text-end">
+                        {% if activity.type == 'delivery' %}
+                            PKR {{ activity.unit_price|floatformat:0 }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td class="col-total-before text-end">
+                        {% if activity.type == 'delivery' %}
+                            <span class="text-primary">PKR {{ activity.total_before_delivery_charges|floatformat:0 }}</span>
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td class="col-delivery text-end">
+                        {% if activity.type == 'delivery' and activity.delivery_charges > 0 %}
+                            <span class="text-warning">PKR {{ activity.delivery_charges|floatformat:0 }}</span>
+                        {% elif activity.type == 'delivery' %}
+                            <span class="text-muted">0</span>
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td class="col-damage text-end">
+                        {% if activity.type == 'delivery' and activity.damage_charges > 0 %}
+                            <span class="text-danger fw-bold">
+                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                PKR {{ activity.damage_charges|floatformat:0 }}
+                            </span>
+                        {% elif activity.type == 'delivery' %}
+                            <span class="text-muted">0</span>
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td class="col-total-after text-end">
+                        {% if activity.type == 'delivery' %}
+                            <span class="text-primary fw-bold">PKR {{ activity.total_after_delivery_charges|floatformat:0 }}</span>
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td class="col-calc text-start" style="font-size:0.7rem;">
+                        {% if activity.calculation_details %}
+                            {% for detail in activity.calculation_details %}<div>{{ detail }}</div>{% endfor %}
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td class="col-return text-start" style="font-size:0.7rem;">
+                        {% if activity.return_details %}
+                            {% for detail in activity.return_details %}<div>{{ detail }}</div>{% endfor %}
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td class="col-payment text-end">
+                        {% if activity.payment_amount > 0 %}
+                            <span class="text-success">PKR {{ activity.payment_amount|floatformat:2 }}</span>
+                        {% else %}
+                            0
+                        {% endif %}
+                    </td>
+                    <td class="col-prev-balance text-end">
+                        <span class="fw-bold text-muted">PKR {{ activity.old_balance|floatformat:0 }}</span>
+                    </td>
+                    <td class="col-now-balance text-end">
+                        <span class="fw-bold {% if activity.new_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                            PKR {{ activity.new_balance|floatformat:0 }}
+                        </span>
+                    </td>
+                    <td class="col-old-cyl text-start" style="font-size:0.7rem;">
+                        {% if activity.old_cylinders_display %}
+                            {{ activity.old_cylinders_display }}
+                        {% else %}
+                            0
+                        {% endif %}
+                    </td>
+                    <td class="col-new-cyl text-start" style="font-size:0.7rem;">
+                        {% if activity.new_cylinders_display %}
+                            {{ activity.new_cylinders_display }}
+                        {% else %}
+                            0
+                        {% endif %}
+                    </td>
+                    <td class="col-desc text-start" style="font-size:0.7rem;">
+                        {% if activity.description %}
+                            <span class="badge bg-warning text-dark">{{ activity.description }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="col-actions text-center">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-primary" onclick="openEditModal('{{ activity.id }}')" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-danger" onclick="openDeleteModal('{{ activity.id }}')" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="table-success">
+                    <td colspan="4"><strong>TOTAL</strong></td>
+                    <td class="text-center"><strong>MT: {{ total_empty|default:0 }}</strong></td>
+                    <td class="text-center"><strong>Fill: {{ total_quantity|default:0 }}</strong></td>
+                    <td class="text-center"><strong>Sale: {{ total_sale_quantity|default:0 }}</strong></td>
+                    <td class="text-end"></td>
+                    <td class="text-end"><strong>PKR {{ total_before_delivery_charges|floatformat:0 }}</strong></td>
+                    <td class="text-end"><strong>PKR {{ total_delivery_charges|floatformat:0 }}</strong></td>
+                    <td class="text-end text-danger"><strong>PKR {{ total_damage_charges|floatformat:0 }}</strong></td>
+                    <td class="text-end"><strong>PKR {{ total_after_delivery_charges|floatformat:0 }}</strong></td>
+                    <td colspan="2"></td>
+                    <td class="text-end"><strong>PKR {{ total_payment_amount|floatformat:0 }}</strong></td>
+                    <td colspan="6"></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="text-center py-3">
+    <p class="text-muted">No entries recorded for {{ selected_date|date:'d M Y' }}.</p>
+    <p class="text-muted small">Use the form below to add entries for this date.</p>
+</div>
+{% endif %}
+
+<!-- ============================================================
+SECTION 2: ADD NEW ENTRIES - WITH FIXED HEADER AND SCROLLABLE CARDS
+============================================================ -->
+<div class="card mb-4 daily-entry-form-panel">
+    <!-- FIXED HEADER -->
+    <div class="card-header bg-primary text-white sticky-header">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 class="mb-0">
+                <i class="fas fa-plus-circle me-2"></i>
+                Add New Entries for {{ selected_date|date:'d M Y' }}
+                {% if selected_date != today %}
+                <span class="badge bg-warning text-dark ms-2">Backdating</span>
+                {% endif %}
+                <small class="text-light ms-2">{{ selected_date|date:'Y-m-d' }}</small>
+            </h5>
+            <span class="badge bg-light text-dark" id="entryCount">0 Entries</span>
+        </div>
+    </div>
+    
+    <div class="card-body" style="padding: 0;">
+        <form method="post" id="dailyEntryForm" action="{% url 'deliveries:daily_entry' %}?date={{ selected_date|date:'Y-m-d' }}">
+            {% csrf_token %}
+            <input type="hidden" name="selected_date" value="{{ selected_date|date:'Y-m-d' }}">
+            
+            {% if selected_date != today %}
+            <div class="alert alert-warning alert-sm m-2">
+                <i class="fas fa-clock me-2"></i>
+                <strong>Note:</strong> You are making entries for <strong>{{ selected_date|date:'d M Y' }}</strong> (past date). 
+                All entries will be recorded with this date.
+            </div>
+            {% endif %}
+            
+            <!-- ============================================================
+            SCROLLABLE ENTRY ROWS
+            ============================================================ -->
+            <div id="entriesContainerWrapper" class="entries-scroll-wrapper">
+                <div id="entriesContainer">
+                    <!-- Default 20 entries will be added by JavaScript -->
+                </div>
+            </div>
+            
+            <!-- ============================================================
+            FIXED BOTTOM BUTTONS
+            ============================================================ -->
+            <div class="sticky-footer p-3 border-top bg-light">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-6">
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="button" class="btn btn-success btn-sm" onclick="addEntryBlock(true)">
+                                <i class="fas fa-plus me-1"></i>Add One Entry
+                            </button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="add100DefaultEntries()">
+                                <i class="fas fa-layer-group me-1"></i>Add 100 Default Entries
+                            </button>
+                            <button type="button" class="btn btn-info text-white btn-sm" onclick="loadBFCustomers()">
+                                <i class="fas fa-users me-1"></i>Load Customers (BF System)
+                            </button>
+                        </div>
+                        <small class="text-muted d-block mt-1">
+                            <i class="fas fa-info-circle me-1"></i>💡 Each entry has an individual "Save This Entry" button, or use "Save All"
+                        </small>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex gap-2 justify-content-end flex-wrap">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i>Save All Entries for {{ selected_date|date:'d M Y' }}
+                            </button>
+                            <a href="{% url 'deliveries:daily_entry' %}?date={{ selected_date|date:'Y-m-d' }}" class="btn btn-secondary">
+                                <i class="fas fa-times me-1"></i>Clear All
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ============================================================
+SECTION 3: PAYMENT ONLY (BOTTOM)
+============================================================ -->
+<div class="card form-card mt-4 daily-payment-panel">
+    <div class="card-header card-header-gradient">
+        <h5 class="mb-0 d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-hand-holding-usd me-2"></i>Payment Only for {{ selected_date|date:'d M Y' }}</span>
+            <small class="badge bg-light text-dark">Record payment without products</small>
+        </h5>
+    </div>
+    <div class="card-body p-4">
+        <form method="post" id="paymentOnlyForm" action="{% url 'deliveries:payment_only' %}">
+            {% csrf_token %}
+            <input type="hidden" name="selected_date" value="{{ selected_date|date:'Y-m-d' }}">
+            
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label"><i class="fas fa-user text-primary me-1"></i>Select Customer *</label>
+                    <select name="customer_id" id="payment_customer_id" class="form-select" required>
+                        <option value="">-- Select Customer --</option>
+                        {% for customer in customers %}
+                        <option value="{{ customer.pk }}">{{ customer.name }} ({{ customer.customer_code }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><i class="fas fa-money-bill-wave text-success me-1"></i>Amount *</label>
+                    <div class="input-group">
+                        <span class="input-group-text fw-bold">PKR</span>
+                        <input type="number" name="payment_amount" id="payment_amount_only" class="form-control" 
+                               step="0.01" min="0.01" placeholder="0.00" required>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><i class="fas fa-credit-card text-info me-1"></i>Payment Type</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-exchange-alt"></i></span>
+                        <select name="payment_type" id="payment_type_only" class="form-select">
+                            <option value="cash">Cash</option>
+                            <option value="transfer">Bank Transfer</option>
+                            <option value="upi">UPI / Online</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="fas fa-save me-1"></i>Record
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Customer Balance Display -->
+            <div id="paymentCustomerBalance" class="customer-balance-card mt-3" style="display: none;">
+                <span>👤 Select a customer to view balance</span>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ============================================================
+EDIT MODAL
+============================================================ -->
+<div class="modal fade" id="editEntryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit me-2"></i>Edit Entry
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="editModalBody">
+                <!-- Loading spinner -->
+                <div class="text-center py-5" id="editLoadingSpinner">
+                    <i class="fas fa-spinner fa-spin fa-3x text-primary"></i>
+                    <p class="mt-2">Loading entry data...</p>
+                </div>
+                <!-- Edit form will be loaded here -->
+                <div id="editFormContainer" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Cancel
+                </button>
+                <button type="button" class="btn btn-success" id="saveEditBtn" onclick="saveEditedEntry()">
+                    <i class="fas fa-save me-1"></i>Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+DELETE CONFIRMATION MODAL
+============================================================ -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Confirm Delete
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <i class="fas fa-trash-alt fa-3x text-danger mb-3"></i>
+                <p class="fw-bold">Are you sure you want to delete this entry?</p>
+                <p class="text-muted small">This action cannot be undone!</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Cancel
+                </button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmDeleteEntry()">
+                    <i class="fas fa-trash me-1"></i>Delete
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Product detail editor modal -->
+<div class="modal fade" id="productDetailsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content product-details-modal">
+            <div class="modal-header bg-primary text-white">
+                <div>
+                    <h5 class="modal-title" id="productDetailsModalTitle">Product Details</h5>
+                    <small id="productDetailsModalHelp">Complete the selected details, then save them to this product row.</small>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="productDetailsModalBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveProductDetailsModal()">
+                    <i class="fas fa-check me-1"></i>Save Details
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Print Button -->
+<div class="mt-3 text-center daily-print-button">
+    <button onclick="window.print()" class="btn btn-secondary btn-sm">
+        <i class="fas fa-print me-1"></i>Print Report
+    </button>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="modal fade" id="dailyEntryErrorModal" tabindex="-1" aria-labelledby="dailyEntryErrorTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content daily-entry-error-modal">
+            <div class="modal-header">
+                <div class="d-flex align-items-center gap-3">
+                    <span class="daily-entry-error-icon"><i class="fas fa-exclamation-triangle"></i></span>
+                    <div>
+                        <h5 class="modal-title mb-0" id="dailyEntryErrorTitle">Entry could not be saved</h5>
+                        <small class="text-muted">Review the entry and correct the issue below.</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="daily-entry-error-summary">
+                    <div class="daily-entry-error-detail">
+                        <span class="daily-entry-error-label">Affected entry</span>
+                        <strong id="dailyEntryErrorNumber">Entry #1</strong>
+                    </div>
+                    <div class="daily-entry-error-detail">
+                        <span class="daily-entry-error-label">Problem location</span>
+                        <strong id="dailyEntryErrorLocation">Entry details</strong>
+                    </div>
+                </div>
+                <div class="daily-entry-error-reason">
+                    <span class="daily-entry-error-label">Why it could not be saved</span>
+                    <p id="dailyEntryErrorReason" class="mb-0"></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary px-4" data-bs-dismiss="modal">Review entry</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+<!-- ============================================================
+JAVASCRIPT - WITH CRUD FUNCTIONALITY
+============================================================ -->
+{% block extra_js %}
+<script>
+const dailyFilterCheckboxes = document.querySelectorAll('.daily-filter-checkbox');
+const dailyFilterCount = document.getElementById('dailyFilterCount');
+const clearDailyFilters = document.getElementById('clearDailyFilters');
+
+function updateDailyFilterCount() {
+    if (dailyFilterCount) {
+        dailyFilterCount.textContent = document.querySelectorAll('.daily-filter-checkbox:checked').length;
+    }
+}
+
+dailyFilterCheckboxes.forEach(function (checkbox) {
+    checkbox.addEventListener('change', updateDailyFilterCount);
+});
+
+if (clearDailyFilters) {
+    clearDailyFilters.addEventListener('click', function () {
+        dailyFilterCheckboxes.forEach(function (checkbox) {
+            checkbox.checked = false;
+        });
+        updateDailyFilterCount();
+    });
+}
+
+
+// ============================================================
+// Toggle Walk-in Customer - COMPLETELY FIXED
+// ============================================================
+function toggleWalkinCustomer(id) {
+    var isWalkin = document.getElementById('isWalkin_' + id).checked;
+    var customerSelect = document.getElementById('customer_id_' + id);
+    var existingSection = document.querySelector('.existing-customer-' + id);
+    var newSection = document.querySelector('.new-customer-' + id);
+    var walkinSection = document.getElementById('walkinDetails_' + id);
+    var customerTypeRadios = document.getElementsByName('customer_type_' + id);
+    var balanceDiv = document.getElementById('customerBalanceDisplay_' + id);
+    var detailsDiv = document.getElementById('customerDetails_' + id);
+    
+    if (isWalkin) {
+        // ✅ Disable customer selection entirely
+        if (customerSelect) {
+            customerSelect.disabled = true;
+            customerSelect.style.opacity = '0.6';
+            customerSelect.style.cursor = 'not-allowed';
+        }
+        
+        // ✅ Hide regular customer sections and show walkin details section
+        if (existingSection) {
+            existingSection.style.display = 'none';
+        }
+        if (newSection) {
+            newSection.style.display = 'none';
+        }
+        if (walkinSection) {
+            walkinSection.style.display = 'block';
+        }
+        
+        // ✅ Disable customer type radios
+        customerTypeRadios.forEach(function(r) { 
+            r.disabled = true;
+        });
+        
+        // ✅ Update balance display to show walk-in info
+        if (balanceDiv) {
+            balanceDiv.innerHTML = `
+                <div style="background-color: #d1ecf1; border: 2px solid #17a2b8; border-radius: 6px; padding: 10px 14px; color: #0c5460;">
+                    <i class="fas fa-user-walking me-2" style="font-size: 1.1rem;"></i>
+                    <strong>🚶 Walk-in Customer Mode</strong>
+                    <br><small>Enter Name, Phone, Security Deposit, and Personal Cylinders above (Optional). Customer will be tagged as Walk-in Customer.</small>
+                </div>
+            `;
+            balanceDiv.style.display = 'block';
+            balanceDiv.style.backgroundColor = '#d1ecf1';
+            balanceDiv.style.border = '2px solid #17a2b8';
+            balanceDiv.style.color = '#0c5460';
+        }
+        
+        // ✅ Hide details
+        if (detailsDiv) {
+            detailsDiv.style.display = 'none';
+        }
+        
+        // ✅ Add hidden flag for walk-in
+        var hiddenInput = document.getElementById('walkin_flag_' + id);
+        if (!hiddenInput) {
+            hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.id = 'walkin_flag_' + id;
+            hiddenInput.name = 'walkin_flag_' + id;
+            hiddenInput.value = 'true';
+            document.getElementById('entry-' + id).appendChild(hiddenInput);
+        } else {
+            hiddenInput.value = 'true';
+        }
+        
+        // ✅ Show toast
+        showToast('🚶 Walk-in mode: Enter optional details, products, and payment!', 'info');
+        
+    } else {
+        // ✅ Enable customer selection
+        if (customerSelect) {
+            customerSelect.disabled = false;
+            customerSelect.style.opacity = '1';
+            customerSelect.style.cursor = 'default';
+        }
+        
+        if (walkinSection) {
+            walkinSection.style.display = 'none';
+        }
+        
+        // ✅ Show/hide sections based on radio
+        var isExisting = true;
+        customerTypeRadios.forEach(function(r) { 
+            r.disabled = false;
+            if (r.checked) {
+                isExisting = (r.value === 'existing');
+            }
+        });
+        
+        if (existingSection) {
+            existingSection.style.display = isExisting ? 'block' : 'none';
+        }
+        if (newSection) {
+            newSection.style.display = isExisting ? 'none' : 'block';
+        }
+        
+        // ✅ Reset balance display
+        if (customerSelect && customerSelect.value && isExisting) {
+            loadCustomerBalance(customerSelect.value, id);
+        } else {
+            if (balanceDiv) {
+                balanceDiv.innerHTML = '<span>👤 Select a customer to view balance</span>';
+                balanceDiv.style.backgroundColor = '#f3f4f6';
+                balanceDiv.style.border = '1px solid #d1d5db';
+                balanceDiv.style.color = '#6b7280';
+            }
+        }
+        
+        // ✅ Remove walk-in flag
+        var hiddenInput = document.getElementById('walkin_flag_' + id);
+        if (hiddenInput) {
+            hiddenInput.remove();
+        }
+        
+        showToast('Regular customer mode', 'info');
+    }
+}
+    // ============================================================
+    // Toast Notification
+    // ============================================================
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast-custom ${type}`;
+        const icon = type === 'success' ? 'fa-check-circle' : 
+                     type === 'error' ? 'fa-exclamation-circle' : 
+                     'fa-exclamation-triangle';
+        toast.innerHTML = `
+            <i class="fas ${icon} me-2"></i>
+            ${message}
+            <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+        `;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s';
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
+    }
+
+    function showEntryError(entryNumber, location, reason) {
+        document.getElementById('dailyEntryErrorNumber').textContent =
+            typeof entryNumber === 'number' || /^\d+$/.test(String(entryNumber))
+                ? 'Entry #' + entryNumber
+                : String(entryNumber || 'Entry details');
+        document.getElementById('dailyEntryErrorLocation').textContent = location || 'Entry details';
+        document.getElementById('dailyEntryErrorReason').textContent = reason || 'An unexpected error prevented this entry from being saved.';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('dailyEntryErrorModal')).show();
+    }
+
+    function showServerEntryError() {
+        var errorMessage = document.querySelector('.daily-entry-error-message');
+        if (!errorMessage) return;
+        var message = errorMessage.textContent.trim();
+        var match = message.match(/^Entry #(\d+) could not be saved at (.+?):\s*([\s\S]*)$/);
+        if (match) {
+            showEntryError(Number(match[1]), match[2], match[3]);
+        } else {
+            showEntryError(1, 'Entry save', message);
+        }
+    }
+
+    function getEntryLocation(element) {
+        if (!element) return 'Entry details';
+        var label = element.labels && element.labels.length ? element.labels[0].textContent.trim() : '';
+        if (label) return label.replace(/\s+/g, ' ');
+
+        var row = element.closest('tr');
+        if (row) {
+            var cell = element.closest('td');
+            var table = row.closest('table');
+            var header = cell && table ? table.querySelectorAll('thead th')[cell.cellIndex] : null;
+            if (header) return 'Product row ' + (row.rowIndex) + ' / ' + header.textContent.trim().replace(/\s+/g, ' ');
+        }
+        return element.getAttribute('aria-label') || element.name || 'Entry details';
+    }
+
+    // ============================================================
+    // CRUD OPERATIONS
+    // ============================================================
+    var currentEditEntryId = null;
+    var currentDeleteEntryId = null;
+    var editModal = null;
+    var deleteModal = null;
+
+    // ============================================================
+    // OPEN EDIT MODAL
+    // ============================================================
+    function openEditModal(entryId) {
+        currentEditEntryId = entryId;
+        
+        // Show spinner, hide form
+        document.getElementById('editLoadingSpinner').style.display = 'block';
+        document.getElementById('editFormContainer').style.display = 'none';
+        document.getElementById('editFormContainer').innerHTML = '';
+        
+        if (!editModal) {
+            editModal = new bootstrap.Modal(document.getElementById('editEntryModal'));
+        }
+        editModal.show();
+        
+        // Fetch entry data
+        fetch(`/deliveries/api/daily-entries/?date=${currentDate}`)
+            .then(response => response.json())
+            .then(data => {
+                var entry = data.entries.find(e => e.id === entryId);
+                if (entry) {
+                    loadEditForm(entry);
+                } else {
+                    showToast('Entry not found', 'error');
+                    editModal.hide();
+                }
+            })
+            .catch(error => {
+                showToast('Error loading entry data', 'error');
+                editModal.hide();
+            });
+    }
+
+    // ============================================================
+    // LOAD EDIT FORM
+    // ============================================================
+    function loadEditForm(entry) {
+        var container = document.getElementById('editFormContainer');
+        
+        // Build customer options
+        var customerOptions = '<option value="">-- Select Customer --</option>';
+        customersData.forEach(function(c) {
+            var selected = c.id == entry.customer_id ? 'selected' : '';
+            customerOptions += '<option value="' + c.id + '" ' + selected + '>' + c.name + ' (' + c.code + ') - ' + c.mobile + '</option>';
+        });
+        
+        // Build product options
+        var productOptions = '<option value="">-- Select --</option>';
+        productsData.forEach(function(p) {
+            var selected = entry.products && entry.products[0] && p.id == entry.products[0].product_id ? 'selected' : '';
+            productOptions += '<option value="' + p.id + '" data-price="' + p.price + '" ' + selected + '>' + p.name + '</option>';
+        });
+        
+        var productData = entry.products && entry.products[0] ? entry.products[0] : null;
+        var isPayment = (entry.type === 'payment_only');
+        
+        container.innerHTML = `
+            <div class="row g-3">
+                <input type="hidden" id="editEntryId" value="${entry.id}">
+                <input type="hidden" id="editEntryType" value="${entry.type}">
+                
+                <!-- Customer -->
+                <div class="${isPayment ? 'col-md-12' : 'col-md-6'}">
+                    <label class="form-label fw-bold small">Customer *</label>
+                    <select id="editCustomerId" class="form-select" onchange="loadEditCustomerBalance(this.value)">
+                        ${customerOptions}
+                    </select>
+                </div>
+                
+                <!-- Invoice -->
+                <div class="${isPayment ? 'col-md-12' : 'col-md-6'}">
+                    <label class="form-label fw-bold small">Invoice No</label>
+                    <input type="text" id="editInvoiceNo" class="form-control" value="${entry.invoice_no || ''}" placeholder="INV-001">
+                </div>
+                
+                ${!isPayment ? `
+                <!-- Product -->
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Product *</label>
+                    <select id="editProductId" class="form-select" onchange="updateEditProductPrice()">
+                        ${productOptions}
+                    </select>
+                </div>
+                
+                <!-- Quantity -->
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small">Quantity *</label>
+                    <input type="number" id="editQuantity" class="form-control" min="1" step="1" value="${productData ? productData.full : 0}" onchange="updateEditTotal()">
+                </div>
+                
+                <!-- Rate -->
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small">Rate (PKR)</label>
+                    <input type="number" id="editRate" class="form-control" step="0.01" min="0" value="${productData ? productData.rate : 0}" onchange="updateEditTotal()">
+                </div>
+                
+                <!-- Empty Returned -->
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small">Empty Returned</label>
+                    <input type="number" id="editEmptyReturned" class="form-control" min="0" step="1" value="${productData ? Math.abs(productData.empty || 0) : 0}">
+                    <div class="form-check mt-1 small">
+                        <select id="editCylinderMovement" class="form-select form-select-sm">
+                            <option value="" ${!productData?.cylinder_movement_type ? 'selected' : ''}>Normal</option>
+                            <option value="customer_received" ${productData?.cylinder_movement_type === 'customer_received' ? 'selected' : ''}>Extra received</option>
+                            <option value="customer_returned" ${productData?.cylinder_movement_type === 'customer_returned' ? 'selected' : ''}>Return to customer</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Full Return -->
+                <div class="col-md-4 edit-exception-panel">
+                    <label class="form-label fw-bold small">Full Cylinders Returned</label>
+                    <div class="row g-2">
+                        <div class="col-4"><input type="number" id="editFullReturned" class="form-control" min="0" step="1" value="${productData ? (productData.full_returned || 0) : 0}" placeholder="Qty"></div>
+                        <div class="col-4"><input type="number" id="editFullReturnedValue" class="form-control" min="0" step="0.01" value="${productData ? (productData.full_returned_value || 0) : 0}" placeholder="Value PKR"></div>
+                        <div class="col-4"><select id="editFullReturnedPaid" class="form-select"><option value="false" ${productData && productData.full_returned_paid ? '' : 'selected'}>Credit</option><option value="true" ${productData && productData.full_returned_paid ? 'selected' : ''}>Cash Paid</option></select></div>
+                    </div>
+                </div>
+                
+                <!-- Total -->
+                <div class="col-md-2">
+                    <label class="form-label fw-bold small">Total Amount</label>
+                    <div class="input-group">
+                        <span class="input-group-text">PKR</span>
+                        <input type="text" id="editTotalAmount" class="form-control fw-bold text-primary" readonly value="${productData ? productData.total : '0.00'}">
+                    </div>
+                </div>
+                
+                <!-- Delivery Charges -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold small">Delivery Charges</label>
+                    <div class="input-group">
+                        <span class="input-group-text">PKR</span>
+                        <input type="number" id="editDeliveryCharges" class="form-control" step="0.01" min="0" value="${entry.delivery_charges || 0}" onchange="updateEditTotal()">
+                    </div>
+                </div>
+
+                <!-- Damage -->
+                <div class="col-md-3">
+                    <label class="form-label fw-bold small">Damage Charges</label>
+                    <input type="number" id="editDamageCharges" class="form-control" min="0" step="0.01" value="${entry.damage_charges || 0}">
+                </div>
+
+                <div class="col-md-9">
+                    <label class="form-label fw-bold small">Damage Description</label>
+                    <input type="text" id="editDamageDescription" class="form-control" value="${entry.damage_description || ''}" placeholder="Describe damage, if any">
+                </div>
+
+                <!-- Low Pressure Details -->
+                <div class="col-md-12 edit-exception-panel">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label fw-bold small mb-0">Low Pressure Cylinders</label>
+                        <button type="button" class="btn btn-outline-warning btn-sm" onclick="addEditLowPressureItem()"><i class="fas fa-plus me-1"></i>Add Low Pressure</button>
+                    </div>
+                    <div id="editLowPressureItems" class="row g-2"></div>
+                </div>
+                ` : ''}
+                
+                <!-- Payment Amount -->
+                <div class="${isPayment ? 'col-md-4' : 'col-md-3'}">
+                    <label class="form-label fw-bold small">Payment / Amount</label>
+                    <div class="input-group">
+                        <span class="input-group-text">PKR</span>
+                        <input type="number" id="editPaymentAmount" class="form-control" step="0.01" min="0" value="${entry.payment || 0}">
+                    </div>
+                </div>
+                
+                <!-- Payment Type -->
+                <div class="${isPayment ? 'col-md-4' : 'col-md-3'}">
+                    <label class="form-label fw-bold small">Payment Type</label>
+                    <select id="editPaymentType" class="form-select">
+                        <option value="cash" ${entry.payment_type == 'cash' ? 'selected' : ''}>Cash</option>
+                        <option value="transfer" ${entry.payment_type == 'transfer' ? 'selected' : ''}>Bank Transfer</option>
+                        <option value="upi" ${entry.payment_type == 'upi' ? 'selected' : ''}>UPI</option>
+                    </select>
+                </div>
+                
+                <!-- Delivery Date -->
+                <div class="${isPayment ? 'col-md-4' : 'col-md-3'}">
+                    <label class="form-label fw-bold small">Delivery Date</label>
+                    <input type="date" id="editDeliveryDate" class="form-control" value="${currentDate}">
+                </div>
+                
+                <!-- Description -->
+                <div class="col-md-12">
+                    <label class="form-label fw-bold small">Description</label>
+                    <input type="text" id="editDescription" class="form-control" value="${entry.description || ''}" placeholder="e.g. 10kg gas only...">
+                </div>
+                
+                <!-- Customer Balance Display -->
+                <div class="col-md-12">
+                    <div id="editCustomerBalanceDisplay" class="customer-balance-display alert-sm py-1 px-2" style="display: block; font-size: 0.85rem; background-color: #dbeafe; border: 1px solid #93c5fd; border-radius: 6px; padding: 8px 12px; color: #1e3a8a; min-height: 45px;">
+                        <i class="fas fa-spinner fa-spin"></i> Loading balance...
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Hide spinner, show form
+        document.getElementById('editLoadingSpinner').style.display = 'none';
+        document.getElementById('editFormContainer').style.display = 'block';
+
+        (productData && productData.low_pressure_details || []).forEach(function(item) {
+            addEditLowPressureItem(item);
+        });
+        
+        // Load customer balance
+        if (entry.customer_id) {
+            loadEditCustomerBalance(entry.customer_id);
+        }
+        
+        updateEditTotal();
+    }
+
+    // ============================================================
+    // UPDATE EDIT TOTAL
+    // ============================================================
+    function updateEditTotal() {
+        var quantity = parseFloat(document.getElementById('editQuantity').value) || 0;
+        var rate = parseFloat(document.getElementById('editRate').value) || 0;
+        var deliveryCharges = parseFloat(document.getElementById('editDeliveryCharges').value) || 0;
+        var damageCharges = parseFloat(document.getElementById('editDamageCharges')?.value) || 0;
+        var fullReturnValue = parseFloat(document.getElementById('editFullReturnedValue')?.value) || 0;
+        var lowPressureItems = document.querySelectorAll('#editLowPressureItems .edit-low-pressure-item');
+        var lowPressureTotal = 0;
+        lowPressureItems.forEach(function(item) {
+            lowPressureTotal += parseFloat(item.querySelector('.edit-calc-price').value) || 0;
+        });
+        var fullRateQuantity = Math.max(0, quantity - lowPressureItems.length);
+        var productTotal = lowPressureItems.length ? (fullRateQuantity * rate) + lowPressureTotal : quantity * rate;
+        var total = productTotal + deliveryCharges + damageCharges - fullReturnValue;
+        document.getElementById('editTotalAmount').value = total.toFixed(2);
+    }
+
+    function addEditLowPressureItem(item) {
+        var container = document.getElementById('editLowPressureItems');
+        var wrapper = document.createElement('div');
+        wrapper.className = 'col-md-6 edit-low-pressure-item';
+        wrapper.innerHTML = `
+            <div class="border border-warning rounded p-2 bg-warning-subtle">
+                <div class="d-flex justify-content-between align-items-center mb-2"><strong class="small">Low Pressure</strong><button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('.edit-low-pressure-item').remove(); updateEditTotal();">Remove</button></div>
+                <div class="row g-2">
+                    <div class="col-4"><label class="form-label">Standard PSI</label><input type="number" class="form-control edit-std-pressure" min="1" value="${item ? item.total_pressure : 2000}" oninput="calculateEditLowPressure(this)"></div>
+                    <div class="col-4"><label class="form-label">Actual PSI</label><input type="number" class="form-control edit-act-pressure" min="0" value="${item ? item.actual_pressure : 1400}" oninput="calculateEditLowPressure(this)"></div>
+                    <div class="col-4"><label class="form-label">Value PKR</label><input type="number" class="form-control edit-calc-price" readonly value="${item ? item.calculated_price : 0}"></div>
+                </div>
+            </div>`;
+        container.appendChild(wrapper);
+        calculateEditLowPressure(wrapper.querySelector('.edit-act-pressure'));
+    }
+
+    function calculateEditLowPressure(input) {
+        var item = input.closest('.edit-low-pressure-item');
+        var rate = parseFloat(document.getElementById('editRate').value) || 0;
+        var standard = parseFloat(item.querySelector('.edit-std-pressure').value) || 0;
+        var actual = parseFloat(item.querySelector('.edit-act-pressure').value) || 0;
+        item.querySelector('.edit-calc-price').value = standard > 0 ? ((rate / standard) * actual).toFixed(2) : '0.00';
+        updateEditTotal();
+    }
+
+    // ============================================================
+    // UPDATE EDIT PRODUCT PRICE
+    // ============================================================
+    function updateEditProductPrice() {
+        var select = document.getElementById('editProductId');
+        if (!select) return; // for payment only
+        var price = select.options[select.selectedIndex].getAttribute('data-price') || 0;
+        document.getElementById('editRate').value = price;
+        updateEditTotal();
+    }
+
+    // ============================================================
+    // LOAD EDIT CUSTOMER BALANCE
+    // ============================================================
+    function loadEditCustomerBalance(customerId) {
+        var balanceDiv = document.getElementById('editCustomerBalanceDisplay');
+        
+        if (!customerId || customerId === '') {
+            balanceDiv.innerHTML = '<span>👤 Select a customer to view balance</span>';
+            balanceDiv.style.backgroundColor = '#f3f4f6';
+            balanceDiv.style.border = '1px solid #d1d5db';
+            balanceDiv.style.color = '#6b7280';
+            return;
+        }
+        
+        balanceDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading balance...';
+        balanceDiv.style.backgroundColor = '#dbeafe';
+        balanceDiv.style.border = '1px solid #93c5fd';
+        balanceDiv.style.color = '#1e3a8a';
+        
+        fetch(`/deliveries/daily/get-customer-balance/?customer_id=${customerId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    balanceDiv.innerHTML = `<span style="color: #dc2626;">❌ ${data.error}</span>`;
+                    balanceDiv.style.backgroundColor = '#fee2e2';
+                    balanceDiv.style.border = '1px solid #fca5a5';
+                    return;
+                }
+                
+                var outstanding = data.outstanding || 0;
+                var statusColor = outstanding > 0 ? '#dc2626' : '#059669';
+                var statusIcon = outstanding > 0 ? '⚠️' : (outstanding < 0 ? '💰' : '✅');
+                var statusText = outstanding > 0 ? `Outstanding: PKR ${outstanding.toFixed(2)}` : 
+                                 (outstanding < 0 ? `Advance: PKR ${Math.abs(outstanding).toFixed(2)}` : 'Balance Clear');
+                var bgColor = outstanding > 0 ? '#fee2e2' : '#d1fae5';
+                
+                balanceDiv.style.backgroundColor = bgColor;
+                balanceDiv.style.border = `2px solid ${statusColor}`;
+                balanceDiv.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <div>
+                            <strong style="color: #1e40af; font-size: 0.95rem;">${data.customer_name}</strong>
+                            <span style="color: #6b7280; font-size: 0.8rem;"> (${data.customer_code})</span>
+                            <br>
+                            <span style="color: #6b7280; font-size: 0.78rem;">
+                                <i class="fas fa-phone" style="font-size: 0.7rem;"></i> ${data.customer_mobile}
+                            </span>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="color: ${statusColor}; font-weight: bold; font-size: 1rem;">
+                                ${statusIcon} ${statusText}
+                            </span>
+                            <br>
+                            <span style="color: #6b7280; font-size: 0.72rem;">
+                                Billed: PKR ${(data.total_billed || 0).toFixed(2)} | Paid: PKR ${(data.total_paid || 0).toFixed(2)}
+                            </span>
+                            ${data.last_activity ? `<br><span style="color: #6b7280; font-size: 0.72rem;">Last: ${data.last_activity}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            })
+            .catch(function(error) {
+                console.error("Error fetching balance:", error);
+                balanceDiv.innerHTML = '<span style="color: #dc2626;">❌ Error loading balance</span>';
+                balanceDiv.style.backgroundColor = '#fee2e2';
+                balanceDiv.style.border = '1px solid #fca5a5';
+            });
+    }
+
+    // ============================================================
+    // SAVE EDITED ENTRY
+    // ============================================================
+    function saveEditedEntry() {
+        var entryId = document.getElementById('editEntryId').value;
+        var entryType = document.getElementById('editEntryType').value;
+        var isPayment = (entryType === 'payment_only');
+        
+        var customerId = document.getElementById('editCustomerId').value;
+        var productId = isPayment ? null : (document.getElementById('editProductId').value || null);
+        var quantity = isPayment ? 0 : (parseInt(document.getElementById('editQuantity').value) || 0);
+        var rate = isPayment ? 0 : (parseFloat(document.getElementById('editRate').value) || 0);
+        var emptyReturned = isPayment ? 0 : (parseInt(document.getElementById('editEmptyReturned').value) || 0);
+        var cylinderMovementType = isPayment ? '' : (document.getElementById('editCylinderMovement')?.value || '');
+        var fullReturned = isPayment ? 0 : (parseInt(document.getElementById('editFullReturned').value) || 0);
+        var fullReturnedValue = isPayment ? 0 : (parseFloat(document.getElementById('editFullReturnedValue').value) || 0);
+        var fullReturnedPaid = !isPayment && document.getElementById('editFullReturnedPaid').value === 'true';
+        var deliveryCharges = isPayment ? 0 : (parseFloat(document.getElementById('editDeliveryCharges').value) || 0);
+        var damageCharges = isPayment ? 0 : (parseFloat(document.getElementById('editDamageCharges').value) || 0);
+        var damageDescription = isPayment ? '' : (document.getElementById('editDamageDescription').value || '');
+        var paymentAmount = parseFloat(document.getElementById('editPaymentAmount').value) || 0;
+        var paymentType = document.getElementById('editPaymentType').value;
+        var invoiceNo = document.getElementById('editInvoiceNo').value || '';
+        var description = document.getElementById('editDescription').value || '';
+        var deliveryDate = document.getElementById('editDeliveryDate').value || currentDate;
+        var lowPressureDetails = [];
+        if (!isPayment) {
+            document.querySelectorAll('#editLowPressureItems .edit-low-pressure-item').forEach(function(item) {
+                lowPressureDetails.push({
+                    total_pressure: parseFloat(item.querySelector('.edit-std-pressure').value) || 0,
+                    actual_pressure: parseFloat(item.querySelector('.edit-act-pressure').value) || 0,
+                    calculated_price: parseFloat(item.querySelector('.edit-calc-price').value) || 0
+                });
+            });
+        }
+        
+        console.log("========================================");
+        console.log("🔵 SAVE EDITED ENTRY");
+        console.log("Entry ID:", entryId);
+        console.log("Payment Amount:", paymentAmount);
+        console.log("Payment Type:", paymentType);
+        console.log("========================================");
+        
+        // Validate
+        if (!customerId) {
+            showToast('Please select a customer', 'warning');
+            return;
+        }
+        if (!isPayment) {
+            if (!productId) {
+                showToast('Please select a product', 'warning');
+                return;
+            }
+            if (quantity <= 0 && !cylinderMovementType) {
+                showToast('Quantity must be greater than 0', 'warning');
+                return;
+            }
+        } else {
+            if (paymentAmount <= 0) {
+                showToast('Payment amount must be greater than 0', 'warning');
+                return;
+            }
+        }
+        
+        var total = (quantity * rate) + deliveryCharges;
+        
+        var entryData = {
+            customer_id: customerId,
+            product_id: productId,
+            quantity: quantity,
+            unit_price: rate,
+            empty_returned: emptyReturned,
+            cylinder_movement_type: cylinderMovementType,
+            full_returned: fullReturned,
+            full_returned_value: fullReturnedValue,
+            full_returned_paid: fullReturnedPaid,
+            low_pressure_details: lowPressureDetails,
+            damage_charges: damageCharges,
+            damage_description: damageDescription,
+            delivery_charges: deliveryCharges,
+            payment_amount: paymentAmount,
+            payment_type: paymentType,
+            invoice_no: invoiceNo,
+            description: description,
+            delivery_date: deliveryDate
+        };
+        
+        console.log("Sending data:", JSON.stringify(entryData, null, 2));
+        
+        // Show loading on button
+        var saveBtn = document.getElementById('saveEditBtn');
+        var originalText = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+        saveBtn.disabled = true;
+        
+        fetch('/deliveries/api/update-entry/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                entry_id: entryId,
+                data: entryData
+            })
+        })
+        .then(response => response.json())
+        .then(result => {
+            console.log("Server response:", result);
+            if (result.success) {
+                showToast('Entry updated successfully! Payment: PKR ' + result.entry.payment, 'success');
+                editModal.hide();
+                // Reload the page after a short delay to show updated data
+                setTimeout(function() {
+                    location.reload();
+                }, 1000);
+            } else {
+                showEntryError('Record #' + entryId, result.location || 'Edited entry', result.error || 'Failed to update entry');
+            }
+        })
+        .catch(error => {
+            console.error("Error:", error);
+            showEntryError('Record #' + entryId, 'Edited entry', error.message || 'A network error prevented the edited entry from being saved.');
+        })
+        .finally(() => {
+            saveBtn.innerHTML = originalText;
+            saveBtn.disabled = false;
+        });
+    }
+
+    // ============================================================
+    // OPEN DELETE MODAL
+    // ============================================================
+    function openDeleteModal(entryId) {
+        currentDeleteEntryId = entryId;
+        if (!deleteModal) {
+            deleteModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+        }
+        deleteModal.show();
+    }
+
+    // ============================================================
+    // CONFIRM DELETE ENTRY
+    // ============================================================
+    function confirmDeleteEntry() {
+        var entryId = currentDeleteEntryId;
+        var deleteBtn = document.getElementById('confirmDeleteBtn');
+        var originalText = deleteBtn.innerHTML;
+        deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Deleting...';
+        deleteBtn.disabled = true;
+        
+        fetch('/deliveries/api/delete-entry/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ entry_id: entryId })
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                showToast('Entry deleted successfully!', 'success');
+                deleteModal.hide();
+                // Remove row from table
+                var row = document.getElementById('row-' + entryId);
+                if (row) row.remove();
+                // Also remove from entry blocks if present
+                var blocks = document.querySelectorAll('.entry-block');
+                blocks.forEach(function(block) {
+                    if (block.dataset.entryId === entryId) {
+                        block.remove();
+                    }
+                });
+                updateEntryCount();
+            } else {
+                showToast('Error: ' + (result.error || 'Failed to delete entry'), 'error');
+            }
+        })
+        .catch(error => {
+            showToast('Error deleting entry', 'error');
+        })
+        .finally(() => {
+            deleteBtn.innerHTML = originalText;
+            deleteBtn.disabled = false;
+        });
+    }
+
+    // ============================================================
+    // Customer Data for dropdown
+    // ============================================================
+    var customersData = [
+        {% for customer in customers %}
+        {id: "{{ customer.pk }}", name: "{{ customer.name|escapejs }}", code: "{{ customer.customer_code }}", mobile: "{{ customer.mobile }}", balance: 0},
+        {% endfor %}
+    ];
+    
+    var productsData = [
+        {% for product in products %}
+        {id: "{{ product.pk }}", name: "{{ product.name|escapejs }}", price: "{{ product.unit_price }}", is_quantity_only: {{ product.is_quantity_only|lower }}, is_filling_only: {{ product.is_filling_only|lower }}},
+        {% endfor %}
+    ];
+    
+    // ============================================================
+    // Entry Counter
+    // ============================================================
+    var entryCounter = 0;
+    var DEFAULT_ENTRIES = 100;
+    var currentDate = '{{ selected_date|date:"Y-m-d" }}';
+
+    document.addEventListener('DOMContentLoaded', function() {
+        showServerEntryError();
+        const paymentOnlyForm = document.getElementById('paymentOnlyForm');
+        if (paymentOnlyForm) {
+            paymentOnlyForm.addEventListener('submit', function(e) {
+                const btn = paymentOnlyForm.querySelector('button[type="submit"]');
+                if (btn) {
+                    if (btn.disabled) {
+                        e.preventDefault();
+                        return false;
+                    }
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Recording...';
+                }
+            });
+        }
+
+        const dailyEntryForm = document.getElementById('dailyEntryForm');
+        if (dailyEntryForm) {
+            dailyEntryForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                if (!dailyEntryForm.checkValidity()) {
+                    const invalidField = dailyEntryForm.querySelector(':invalid');
+                    const entryBlock = invalidField && invalidField.closest('.entry-block');
+                    if (invalidField) invalidField.focus();
+                    showEntryError(
+                        entryBlock ? entryBlock.id.replace('entry-', '') : 1,
+                        getEntryLocation(invalidField),
+                        invalidField ? (invalidField.validationMessage || 'This field has an invalid value.') : 'Please review the highlighted field.'
+                    );
+                    return;
+                }
+
+                const btn = dailyEntryForm.querySelector('button[type="submit"]');
+                const originalButtonHtml = btn ? btn.innerHTML : '';
+                if (btn) {
+                    if (btn.disabled) {
+                        return;
+                    }
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving All...';
+                }
+
+                try {
+                    const response = await fetch(dailyEntryForm.action, {
+                        method: 'POST',
+                        body: new FormData(dailyEntryForm),
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    const result = await response.json();
+                    if (!response.ok || !result.success) {
+                        if (!result.entry_number) {
+                            showToast(result.error || 'There are no entries with data to save.', 'warning');
+                            return;
+                        }
+                        showEntryError(
+                            result.entry_number || 1,
+                            result.location || 'Entry details',
+                            result.error || 'The server could not save the entries. Please review the entry and try again.'
+                        );
+                        return;
+                    }
+                    showToast(result.message || 'Entries saved successfully.', 'success');
+                    setTimeout(function() { location.reload(); }, 900);
+                } catch (error) {
+                    console.error('Error saving daily entries:', error);
+                    showEntryError(1, 'Daily Entry save request', error.message || 'A network error prevented the entries from being saved.');
+                } finally {
+                    if (btn && document.body.contains(btn)) {
+                        btn.disabled = false;
+                        btn.innerHTML = originalButtonHtml;
+                    }
+                }
+            });
+        }
+    });
+
+    // ============================================================
+    // Show Customer Balance - WITH CYLINDER & RATE DETAILS
+    // ============================================================
+    function showCustomerBalance(customerId, id) {
+        console.log("🟢 showCustomerBalance called - ID:", id, "Customer:", customerId);
+        
+        var balanceDiv = document.getElementById('customerBalanceDisplay_' + id);
+        var detailsDiv = document.getElementById('customerDetails_' + id);
+        var cylinderDiv = document.getElementById('cylinderDetails_' + id);
+        var rateDiv = document.getElementById('rateDetails_' + id);
+        
+        if (!balanceDiv) {
+            console.log("🔴 balanceDiv NOT found for ID:", id);
+            return;
+        }
+        
+        // If no customer selected, show placeholder
+        if (!customerId || customerId === '') {
+            balanceDiv.style.display = 'block';
+            balanceDiv.style.visibility = 'visible';
+            balanceDiv.style.opacity = '1';
+            balanceDiv.style.backgroundColor = '#f3f4f6';
+            balanceDiv.style.border = '1px solid #d1d5db';
+            balanceDiv.style.color = '#6b7280';
+            balanceDiv.innerHTML = '<span>👤 Select a customer to view balance</span>';
+            
+            // Hide details
+            if (detailsDiv) detailsDiv.style.display = 'none';
+            return;
+        }
+        
+        // Force show the div
+        balanceDiv.style.display = 'block';
+        balanceDiv.style.visibility = 'visible';
+        balanceDiv.style.opacity = '1';
+        balanceDiv.style.backgroundColor = '#dbeafe';
+        balanceDiv.style.border = '1px solid #93c5fd';
+        balanceDiv.style.borderRadius = '6px';
+        balanceDiv.style.padding = '10px 14px';
+        balanceDiv.style.marginTop = '8px';
+        balanceDiv.style.marginBottom = '8px';
+        balanceDiv.style.color = '#1e3a8a';
+        balanceDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading balance...';
+        
+        // Show details container
+        if (detailsDiv) {
+            detailsDiv.style.display = 'block';
+            if (cylinderDiv) cylinderDiv.innerHTML = '<small class="text-muted"><i class="fas fa-spinner fa-spin"></i> Loading...</small>';
+            if (rateDiv) rateDiv.innerHTML = '<small class="text-muted"><i class="fas fa-spinner fa-spin"></i> Loading...</small>';
+        }
+        
+        // Fetch customer balance and details
+        fetch(`/deliveries/daily/get-customer-balance/?customer_id=${customerId}`)
+            .then(response => response.json())
+            .then(data => {
+                console.log("🟢 Balance data received for ID:", id, data);
+                
+                if (data.error) {
+                    balanceDiv.innerHTML = `<span style="color: #dc2626;">❌ ${data.error}</span>`;
+                    balanceDiv.style.backgroundColor = '#fee2e2';
+                    balanceDiv.style.border = '1px solid #fca5a5';
+                    if (detailsDiv) detailsDiv.style.display = 'none';
+                    return;
+                }
+                
+                var outstanding = data.outstanding;
+                var statusHtml = '';
+                var statusColor = '';
+                var statusIcon = '';
+                var bgColor = '';
+                
+                if (outstanding > 0) {
+                    statusColor = '#dc2626';
+                    bgColor = '#fee2e2';
+                    statusIcon = '⚠️';
+                    statusHtml = `Outstanding: PKR ${outstanding.toFixed(2)}`;
+                } else if (outstanding < 0) {
+                    statusColor = '#059669';
+                    bgColor = '#d1fae5';
+                    statusIcon = '💰';
+                    statusHtml = `Advance: PKR ${Math.abs(outstanding).toFixed(2)}`;
+                } else {
+                    statusColor = '#059669';
+                    bgColor = '#d1fae5';
+                    statusIcon = '✅';
+                    statusHtml = 'Balance Clear';
+                }
+                
+                // Update balance display
+                balanceDiv.style.backgroundColor = bgColor;
+                balanceDiv.style.border = `2px solid ${statusColor}`;
+                balanceDiv.style.borderRadius = '6px';
+                balanceDiv.style.padding = '10px 14px';
+                balanceDiv.style.marginTop = '8px';
+                balanceDiv.style.marginBottom = '8px';
+                
+                balanceDiv.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <div>
+                            <strong style="color: #1e40af; font-size: 0.95rem;">${data.customer_name}</strong>
+                            <span style="color: #6b7280; font-size: 0.8rem;"> (${data.customer_code})</span>
+                            <br>
+                            <span style="color: #6b7280; font-size: 0.78rem;">
+                                <i class="fas fa-phone" style="font-size: 0.7rem;"></i> ${data.customer_mobile}
+                            </span>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="color: ${statusColor}; font-weight: bold; font-size: 1rem;">
+                                ${statusIcon} ${statusHtml}
+                            </span>
+                            <br>
+                            <span style="color: #6b7280; font-size: 0.72rem;">
+                                Billed: PKR ${data.total_billed.toFixed(2)} | Paid: PKR ${data.total_paid.toFixed(2)}
+                            </span>
+                            ${data.last_activity ? `<br><span style="color: #6b7280; font-size: 0.72rem;">Last: ${data.last_activity}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+                
+                // ============================================================
+                // CYLINDER DETAILS - Show current cylinders per product
+                // ============================================================
+                if (cylinderDiv && data.cylinders) {
+                    var cylinderHtml = '';
+                    var hasCylinders = false;
+                    
+                    if (data.cylinders && Object.keys(data.cylinders).length > 0) {
+                        var cylinderKeys = Object.keys(data.cylinders);
+                        cylinderKeys.forEach(function(productName) {
+                            var qty = data.cylinders[productName];
+                            if (qty !== 0) {
+                                hasCylinders = true;
+                                var badgeColor = qty > 0 ? 'bg-danger' : 'bg-warning text-dark';
+                                var ownershipText = qty > 0 ? 'with customer (return)' : 'at company (give)';
+                                cylinderHtml += `<span class="badge ${badgeColor} me-1">${productName}: ${Math.abs(qty)} ${ownershipText}</span>`;
+                            }
+                        });
+                    }
+                    
+                    if (!hasCylinders) {
+                        cylinderHtml = '<small class="text-muted">No cylinders currently assigned</small>';
+                    }
+                    cylinderDiv.innerHTML = cylinderHtml;
+                }
+                
+                // ============================================================
+                // RATE DETAILS - Show last rates per product
+                // ============================================================
+                if (rateDiv && data.last_rates) {
+                    var rateHtml = '';
+                    var hasRates = false;
+                    
+                    if (data.last_rates && Object.keys(data.last_rates).length > 0) {
+                        var rateKeys = Object.keys(data.last_rates);
+                        rateKeys.forEach(function(productName) {
+                            var rate = data.last_rates[productName];
+                            if (rate > 0) {
+                                hasRates = true;
+                                rateHtml += `<span class="badge bg-info me-1">${productName}: PKR ${rate}</span>`;
+                            }
+                        });
+                    }
+                    
+                    if (!hasRates) {
+                        rateHtml = '<small class="text-muted">No previous rates found</small>';
+                    }
+                    rateDiv.innerHTML = rateHtml;
+                }
+            })
+            .catch(function(error) {
+                console.error("🔴 Error fetching balance:", error);
+                balanceDiv.innerHTML = '<span style="color: #dc2626;">❌ Error loading balance. Please try again.</span>';
+                balanceDiv.style.backgroundColor = '#fee2e2';
+                balanceDiv.style.border = '1px solid #fca5a5';
+                if (detailsDiv) detailsDiv.style.display = 'none';
+            });
+    }
+
+    // ============================================================
+    // Load Customer Balance - FIXED: Direct call with proper ID
+    // ============================================================
+    function loadCustomerBalance(customerId, id) {
+        console.log("🔵 loadCustomerBalance called - ID:", id, "Customer:", customerId);
+        showCustomerBalance(customerId, id);
+    }
+
+    // ============================================================
+    // Load Payment Customer Balance (for Payment Only) - FIXED
+    // ============================================================
+    function loadPaymentCustomerBalance(customerId) {
+        console.log("🟢 loadPaymentCustomerBalance called with ID:", customerId);
+        
+        var balanceDiv = document.getElementById('paymentCustomerBalance');
+        
+        if (!balanceDiv) {
+            console.log("🔴 paymentCustomerBalance NOT found");
+            return;
+        }
+        
+        if (!customerId || customerId === '') {
+            balanceDiv.style.display = 'block';
+            balanceDiv.style.visibility = 'visible';
+            balanceDiv.style.opacity = '1';
+            balanceDiv.style.backgroundColor = '#f3f4f6';
+            balanceDiv.style.border = '1px solid #d1d5db';
+            balanceDiv.style.color = '#6b7280';
+            balanceDiv.innerHTML = '<span>👤 Select a customer to view balance</span>';
+            return;
+        }
+        
+        balanceDiv.style.display = 'block';
+        balanceDiv.style.visibility = 'visible';
+        balanceDiv.style.opacity = '1';
+        balanceDiv.style.backgroundColor = '#dbeafe';
+        balanceDiv.style.border = '1px solid #93c5fd';
+        balanceDiv.style.borderRadius = '6px';
+        balanceDiv.style.padding = '10px 14px';
+        balanceDiv.style.marginTop = '8px';
+        balanceDiv.style.marginBottom = '8px';
+        balanceDiv.style.color = '#1e3a8a';
+        balanceDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading balance...';
+        
+        fetch(`/deliveries/daily/get-customer-balance/?customer_id=${customerId}`)
+            .then(response => response.json())
+            .then(data => {
+                console.log("🟢 Balance data received:", data);
+                
+                if (data.error) {
+                    balanceDiv.innerHTML = `<span style="color: #dc2626;">❌ ${data.error}</span>`;
+                    balanceDiv.style.backgroundColor = '#fee2e2';
+                    balanceDiv.style.border = '1px solid #fca5a5';
+                    return;
+                }
+                
+                var outstanding = data.outstanding || 0;
+                var statusColor = '';
+                var statusIcon = '';
+                var bgColor = '';
+                var statusText = '';
+                
+                if (outstanding > 0) {
+                    statusColor = '#dc2626';
+                    bgColor = '#fee2e2';
+                    statusIcon = '⚠️';
+                    statusText = `Outstanding: PKR ${outstanding.toFixed(2)}`;
+                } else if (outstanding < 0) {
+                    statusColor = '#059669';
+                    bgColor = '#d1fae5';
+                    statusIcon = '💰';
+                    statusText = `Advance: PKR ${Math.abs(outstanding).toFixed(2)}`;
+                } else {
+                    statusColor = '#059669';
+                    bgColor = '#d1fae5';
+                    statusIcon = '✅';
+                    statusText = 'Balance Clear';
+                }
+                
+                balanceDiv.style.backgroundColor = bgColor;
+                balanceDiv.style.border = `2px solid ${statusColor}`;
+                balanceDiv.style.borderRadius = '6px';
+                balanceDiv.style.padding = '10px 14px';
+                balanceDiv.style.marginTop = '8px';
+                balanceDiv.style.marginBottom = '8px';
+                
+                balanceDiv.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <div>
+                            <strong style="color: #1e40af; font-size: 0.95rem;">${data.customer_name}</strong>
+                            <span style="color: #6b7280; font-size: 0.8rem;"> (${data.customer_code})</span>
+                            <br>
+                            <span style="color: #6b7280; font-size: 0.78rem;">
+                                <i class="fas fa-phone" style="font-size: 0.7rem;"></i> ${data.customer_mobile || 'N/A'}
+                            </span>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="color: ${statusColor}; font-weight: bold; font-size: 1rem;">
+                                ${statusIcon} ${statusText}
+                            </span>
+                            <br>
+                            <span style="color: #6b7280; font-size: 0.72rem;">
+                                Billed: PKR ${(data.total_billed || 0).toFixed(2)} | Paid: PKR ${(data.total_paid || 0).toFixed(2)}
+                            </span>
+                            ${data.last_activity ? `<br><span style="color: #6b7280; font-size: 0.72rem;">Last: ${data.last_activity}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+                
+                if (outstanding > 0) {
+                    var paymentAmount = document.getElementById('payment_amount_only');
+                    if (paymentAmount && (!paymentAmount.value || parseFloat(paymentAmount.value) === 0)) {
+                        paymentAmount.placeholder = 'Suggested: ' + outstanding.toFixed(2);
+                    }
+                }
+            })
+            .catch(function(error) {
+                console.error("🔴 Error fetching balance:", error);
+                balanceDiv.innerHTML = '<span style="color: #dc2626;">❌ Error loading balance. Please try again.</span>';
+                balanceDiv.style.backgroundColor = '#fee2e2';
+                balanceDiv.style.border = '1px solid #fca5a5';
+            });
+    }
+
+    // ============================================================
+    // Add Entry Block
+    // ============================================================
+    function addEntryBlock(scrollToEntry = true) {
+        entryCounter++;
+        var container = document.getElementById('entriesContainer');
+        
+        var block = document.createElement('div');
+        block.className = 'entry-block card mb-3 p-3 border';
+        block.id = 'entry-' + entryCounter;
+        block.style.backgroundColor = '#f8f9fa';
+        block.style.borderRadius = '8px';
+        
+        // Customer Options HTML
+        var customerOptions = '<option value="">-- Select Customer --</option>';
+        customersData.forEach(function(c) {
+            customerOptions += '<option value="' + c.id + '">' + c.name + ' (' + c.code + ') - ' + c.mobile + '</option>';
+        });
+        
+        // Product Options HTML
+        var productOptions = '<option value="">-- Select --</option>';
+        productsData.forEach(function(p) {
+            const productTypeLabel = p.is_filling_only ? ' (Filling Only)' : (p.is_quantity_only ? ' (Sale Only)' : '');
+            productOptions += '<option value="' + p.id + '" data-price="' + p.price + '" data-is-qty-only="' + p.is_quantity_only + '" data-is-filling-only="' + p.is_filling_only + '">' + p.name + productTypeLabel + '</option>';
+        });
+        
+        block.innerHTML = `
+            <!-- Entry Header -->
+            <div class="row g-2 mb-2">
+                <div class="col-md-12">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <strong class="text-primary">Entry #${entryCounter}</strong>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="removeEntryBlock(${entryCounter})">
+                            <i class="fas fa-times"></i> Remove
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Walk-in Customer Toggle - Moved outside customer type section -->
+            <div class="row g-2 mb-2">
+                <div class="col-md-12">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="isWalkin_${entryCounter}" 
+                            onchange="toggleWalkinCustomer(${entryCounter})">
+                        <label class="form-check-label fw-bold text-primary" for="isWalkin_${entryCounter}">
+                            <i class="fas fa-user-walking me-1"></i> Walk-in Customer 
+                            <small class="text-muted">(Enter Name, Mobile, Security Deposit & Personal Cylinders)</small>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Walk-in Customer Input Details (Visible when Walk-in toggle is checked) -->
+            <div class="row g-2 mb-2 walkin-details-${entryCounter}" id="walkinDetails_${entryCounter}" style="display:none;">
+                <div class="col-md-12">
+                    <div class="p-2 bg-light border border-info rounded">
+                        <div class="row g-2">
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold small text-info"><i class="fas fa-user me-1"></i>Walk-in Name</label>
+                                <input type="text" name="walkin_name_${entryCounter}" id="walkin_name_${entryCounter}" class="form-control form-control-sm" placeholder="e.g. Ali, Hassan (Optional)">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold small text-info"><i class="fas fa-phone me-1"></i>Mobile Number</label>
+                                <input type="text" name="walkin_mobile_${entryCounter}" id="walkin_mobile_${entryCounter}" class="form-control form-control-sm" placeholder="03XX-XXXXXXX (Optional)">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold small text-info"><i class="fas fa-shield-alt me-1"></i>Security Deposit</label>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text">PKR</span>
+                                    <input type="number" name="walkin_security_${entryCounter}" id="walkin_security_${entryCounter}" class="form-control form-control-sm" placeholder="0" step="0.01" min="0" value="0">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold small text-info"><i class="fas fa-cubes me-1"></i>Personal Cylinders</label>
+                                <input type="number" name="walkin_personal_${entryCounter}" id="walkin_personal_${entryCounter}" class="form-control form-control-sm" placeholder="0" min="0" value="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Customer Selection -->
+            <div class="row g-2 mb-2">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold small">Customer Type</label>
+                    <div class="d-flex gap-3">
+                        <div class="form-check">
+                            <input type="radio" name="customer_type_${entryCounter}" value="existing" 
+                                class="form-check-input" checked onchange="toggleCustomerType(${entryCounter})">
+                            <label class="form-check-label small">Existing</label>
+                        </div>
+                        <div class="form-check">
+                            <input type="radio" name="customer_type_${entryCounter}" value="new" 
+                                class="form-check-input" onchange="toggleCustomerType(${entryCounter})">
+                            <label class="form-check-label small">New</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-9 existing-customer-${entryCounter}">
+                    <div class="row g-1">
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold small">Select Customer</label>
+                            <select name="customer_id_${entryCounter}" 
+                                id="customer_id_${entryCounter}" 
+                                class="form-select form-select-sm">
+                                ${customerOptions}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-9 new-customer-${entryCounter}" style="display:none;">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small">Name *</label>
+                            <input type="text" name="new_name_${entryCounter}" class="form-control form-control-sm" placeholder="Full Name">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold small">Mobile (Optional)</label>
+                            <input type="text" name="new_mobile_${entryCounter}" class="form-control form-control-sm" placeholder="03XX-XXXXXXX (Optional)">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold small">Security Deposit</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">PKR</span>
+                                <input type="number" name="new_security_${entryCounter}" class="form-control form-control-sm" 
+                                    placeholder="0" step="0.01" min="0" value="0">
+                            </div>
+                            <small class="text-muted" style="font-size: 0.6rem;">Optional security deposit</small>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold small">Personal Cylinders</label>
+                            <input type="number" name="new_personal_cylinders_${entryCounter}" class="form-control form-control-sm" 
+                                placeholder="0" min="0" value="0">
+                            <small class="text-muted" style="font-size: 0.6rem;">Cylinders customer already owns</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Customer Balance Display -->
+            <div id="customerBalanceDisplay_${entryCounter}" class="customer-balance-display alert-sm py-1 px-2 mb-2" style="display: block; font-size: 0.85rem; background-color: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 12px; margin-top: 8px; margin-bottom: 8px; color: #6b7280; min-height: 45px;">
+                <span>👤 Select a customer to view balance</span>
+            </div>
+            
+            <!-- Customer Details - Cylinders & Last Rates -->
+            <div id="customerDetails_${entryCounter}" style="display: none;" class="mb-2">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-header py-1 px-2 bg-info text-white">
+                                <small class="fw-bold"><i class="fas fa-cylinder me-1"></i>Current Cylinders</small>
+                            </div>
+                            <div class="card-body py-1 px-2" id="cylinderDetails_${entryCounter}">
+                                <small class="text-muted">Select customer to view cylinders</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-header py-1 px-2 bg-success text-white">
+                                <small class="fw-bold"><i class="fas fa-tag me-1"></i>Last Rates</small>
+                            </div>
+                            <div class="card-body py-1 px-2" id="rateDetails_${entryCounter}">
+                                <small class="text-muted">Select customer to view rates</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Products Table with Delivery Charges & Sale Qty -->
+            <div class="table-responsive daily-products-table-wrapper">
+                <table class="table table-bordered table-sm daily-products-table" id="productsTable_${entryCounter}">
+                    <thead class="table-light daily-products-table-header">
+                        <tr style="font-size: 0.8rem;">
+                            <th style="width: 7%;">Invoice</th>
+                            <th style="width: 14%;">Product</th>
+                            <th style="width: 5%;">Empty (MT)</th>
+                            <th style="width: 5%;">Qty/Full (Fill)</th>
+                            <th style="width: 5%;">Sale Qty</th>
+                            <th style="width: 7%;">Rate</th>
+                            <th style="width: 9%;">Total</th>
+                            <th style="width: 8%;">Delivery Charges</th>
+                            <th style="width: 8%;">Damage Charges</th> 
+                            <th style="width: 8%;">Payment</th>
+                            <th style="width: 8%;">Payment Type</th>
+                            <th style="width: 14%;">Description</th>
+                            <th style="width: 4%;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productsBody_${entryCounter}">
+                        <tr class="product-row">
+                            <td>
+                                <input type="text" name="invoice_numbers_${entryCounter}[]" 
+                                    class="form-control form-control-sm invoice-no" 
+                                    placeholder="Invoice" style="font-size: 0.8rem;">
+                            </td>
+                            <td>
+                                <select name="product_ids_${entryCounter}[]" 
+                                        id="product_id_${entryCounter}_1"
+                                        class="form-select form-select-sm product-select" 
+                                        onchange="updateProductPrice(this, ${entryCounter}); checkStockOnProductChange(this, ${entryCounter});">
+                                    ${productOptions}
+                                </select>
+                            </td>
+                            <td>
+                                <input type="number" name="empty_returns_${entryCounter}[]" 
+                                    class="form-control form-control-sm empty-return text-center" 
+                                    min="0" step="1" value="0" placeholder="Empty" 
+                                    oninput="onEmptyOrFullChange(this, ${entryCounter})"
+                                    onchange="calculateRowTotal(this, ${entryCounter})" 
+                                    style="font-size: 0.8rem; width: 50px;">
+                                <select name="cylinder_movements_${entryCounter}[]" class="form-select form-select-sm customer-cylinder-movement mt-1" onchange="toggleEmptyReturnMode(this, ${entryCounter})" style="font-size: 0.68rem;">
+                                    <option value="">Normal</option>
+                                    <option value="customer_received">Extra received</option>
+                                    <option value="customer_returned">Return to customer</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input type="number" name="quantities_${entryCounter}[]" 
+                                    class="form-control form-control-sm quantity text-center" 
+                                    min="0" step="0.1" placeholder="Qty kg" 
+                                    oninput="onEmptyOrFullChange(this, ${entryCounter})"
+                                    onchange="calculateRowTotal(this, ${entryCounter}); checkStockOnChange(this, ${entryCounter});" 
+                                    style="font-size: 0.8rem; width: 50px;">
+                            </td>
+                            <td>
+                                <input type="number" name="sale_quantities_${entryCounter}[]" 
+                                    class="form-control form-control-sm sale-quantity text-center fw-bold text-primary" 
+                                    min="0" step="1" value="0" placeholder="Sale" 
+                                    oninput="onSaleQtyChange(this, ${entryCounter})"
+                                    onchange="calculateRowTotal(this, ${entryCounter}); checkStockOnChange(this, ${entryCounter});" 
+                                    style="font-size: 0.8rem; width: 50px;">
+                            </td>
+                            <td>
+                                <input type="number" name="product_prices_${entryCounter}[]" 
+                                    class="form-control form-control-sm product-price text-end" 
+                                    step="0.01" min="0" placeholder="Rate" 
+                                    onchange="calculateRowTotal(this, ${entryCounter})" 
+                                    style="font-size: 0.8rem; width: 75px;">
+                            </td>
+                            <td>
+                                <input type="text" class="form-control form-control-sm row-total text-end fw-bold" 
+                                    readonly value="0.00" placeholder="Total" style="font-size: 0.8rem; width: 80px;">
+                            </td>
+                            <td>
+                                <input type="number" name="delivery_charges_${entryCounter}[]" 
+                                    class="form-control form-control-sm delivery-charges text-end" 
+                                    step="0.01" min="0" placeholder="Delivery" 
+                                    style="font-size: 0.8rem; width: 70px;" 
+                                    onchange="calculateRowTotal(this, ${entryCounter})">
+                            </td>
+
+                            <!-- Damage Charges Column - Amount Only -->
+                            <td>
+                                <input type="number" name="damage_charges_${entryCounter}[]" 
+                                    class="form-control form-control-sm damage-charges text-end text-danger fw-bold" 
+                                    step="0.01" min="0" placeholder="Damage" 
+                                    style="font-size: 0.8rem; width: 80px; border-color: #dc3545;" 
+                                    onchange="calculateRowTotal(this, ${entryCounter})">
+                            </td>
+
+
+                            <td>
+                                <input type="number" name="payment_amount_${entryCounter}[]" 
+                                    class="form-control form-control-sm payment-amount text-end" 
+                                    step="0.01" min="0" placeholder="Payment" 
+                                    style="font-size: 0.8rem; width: 80px;" 
+                                    onchange="updateRowPaymentStatus(this, ${entryCounter})">
+                            </td>
+                            <td>
+                                <select name="payment_type_${entryCounter}[]" 
+                                        class="form-select form-select-sm payment-type" 
+                                        style="font-size: 0.75rem; width: 80px;">
+                                    <option value="cash">Cash</option>
+                                    <option value="transfer">Transfer</option>
+                                    <option value="upi">UPI</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input type="text" name="description_${entryCounter}[]" 
+                                    class="form-control form-control-sm description-input" 
+                                    placeholder="Description" 
+                                    style="font-size: 0.75rem; width: 100%; min-width: 100px;">
+                                <input type="hidden" name="low_pressure_json_${entryCounter}[]" class="lp-json-input">
+                                
+                                <!-- Full Cylinder Return Container -->
+                                <div class="full-return-container mt-1 p-1 bg-info-subtle border border-info rounded" style="display: none; font-size: 0.75rem;">
+                                    <div class="d-flex align-items-center gap-1 flex-wrap">
+                                        <span class="badge bg-info text-dark" style="font-size: 0.68rem;"><i class="fas fa-undo me-1"></i>Full Return</span>
+                                        <div class="input-group input-group-sm" style="width: 95px;">
+                                            <span class="input-group-text py-0 px-1" style="font-size: 0.7rem;">Qty</span>
+                                            <input type="number" name="full_returned_${entryCounter}[]" class="form-control form-control-sm full-returned-qty text-center fw-bold text-info" value="0" min="0" step="1" style="font-size: 0.72rem;">
+                                        </div>
+                                        <div class="input-group input-group-sm" style="width: 135px;">
+                                            <span class="input-group-text py-0 px-1" style="font-size: 0.7rem;">Value PKR</span>
+                                            <input type="number" name="full_returned_value_${entryCounter}[]" class="form-control form-control-sm full-returned-val text-end fw-bold text-success" value="0.00" min="0" step="0.01" style="font-size: 0.72rem;">
+                                        </div>
+                                        <select name="full_returned_paid_${entryCounter}[]" class="form-select form-select-sm full-returned-paid" style="width: 130px; font-size: 0.7rem;">
+                                            <option value="false">💳 Credit Account</option>
+                                            <option value="true">💵 Paid Cash On Spot</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <div class="d-flex gap-1 justify-content-center">
+                                    <button type="button" class="btn btn-info btn-sm py-1 px-1 text-white full-return-action" 
+                                            onclick="openFullReturnModal(this, ${entryCounter})" 
+                                            title="Record Full Cylinder Returned by Customer" style="font-size: 0.72rem;">
+                                        <i class="fas fa-undo me-1"></i>Full Return
+                                    </button>
+                                    <button type="button" class="btn btn-warning btn-sm py-1 px-1 low-pressure-action" 
+                                            onclick="openLowPressureModal(this, ${entryCounter})" 
+                                            title="Add Low Pressure Cylinder" style="font-size: 0.72rem;">
+                                        <i class="fas fa-tachometer-alt me-1"></i>Low Press
+                                    </button>
+                                    <button type="button" class="btn btn-danger btn-sm py-1 px-2" 
+                                            onclick="removeProductRow(this, ${entryCounter})" 
+                                            style="font-size: 0.8rem;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <div class="row-detail-summary mt-2" aria-live="polite">
+                                    <div class="row-detail-summary-title"><i class="fas fa-calculator me-1"></i>Calculation Preview</div>
+                                    <div class="row-detail-summary-body"><span class="text-muted">Select a product and enter values to see the calculation.</span></div>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="6" class="text-end"><strong>Total:</strong></td>
+                            <td colspan="5">
+                                <input type="text" id="grandTotal_${entryCounter}" class="form-control form-control-sm fw-bold text-primary" 
+                                    readonly value="0.00" style="font-size: 1rem;">
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            
+            <!-- Add Product Button and Individual Save Button -->
+            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                <button type="button" class="btn btn-success btn-sm" onclick="addProductRow(${entryCounter})">
+                    <i class="fas fa-plus me-1"></i>Add Product
+                </button>
+                <div>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="saveIndividualEntry(${entryCounter}, this)">
+                        <i class="fas fa-save me-1"></i>Save This Entry
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(block);
+        
+        // Update entry count
+        updateEntryCount();
+        
+        // Check if there's a selected customer
+        var selectElement = document.getElementById('customer_id_' + entryCounter);
+        if (selectElement && selectElement.value) {
+            console.log("🟢 Auto-loading balance for entry " + entryCounter + " with customer: " + selectElement.value);
+            loadCustomerBalance(selectElement.value, entryCounter);
+        }
+        
+        // Only scroll if this is a manual addition (not initial load)
+        if (scrollToEntry) {
+            setTimeout(function() {
+                block.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+        }
+    }
+    
+    // ============================================================
+    // Update Entry Count
+    // ============================================================
+    function updateEntryCount() {
+        var count = document.querySelectorAll('.entry-block').length;
+        var countBadge = document.getElementById('entryCount');
+        if (countBadge) {
+            countBadge.textContent = count + ' Entries';
+        }
+    }
+    
+    // ============================================================
+    // Remove Entry Block
+    // ============================================================
+    function removeEntryBlock(id) {
+        var block = document.getElementById('entry-' + id);
+        if (document.getElementById('entriesContainer').children.length > 1) {
+            block.remove();
+            updateEntryCount();
+        } else {
+            alert('You must keep at least one entry.');
+        }
+    }
+    
+    // ============================================================
+    // Save Individual Entry - FIXED for Walk-in
+    // ============================================================
+    function saveIndividualEntry(entryId, button) {
+        console.log("🔵 Saving individual entry:", entryId);
+        
+        var block = document.getElementById('entry-' + entryId);
+        if (!block) {
+            showEntryError(entryId, 'Entry form', 'This entry is no longer available on the page.');
+            return;
+        }
+        
+        // ✅ Check if walk-in mode is active
+        var isWalkinCheckbox = document.getElementById('isWalkin_' + entryId);
+        var isWalkin = isWalkinCheckbox ? isWalkinCheckbox.checked : false;
+        
+        console.log("Walk-in mode:", isWalkin);
+        
+        // Get customer type
+        var customerTypeRadios = document.getElementsByName('customer_type_' + entryId);
+        var isExisting = false;
+        for (var i = 0; i < customerTypeRadios.length; i++) {
+            if (customerTypeRadios[i].checked && customerTypeRadios[i].value === 'existing') {
+                isExisting = true;
+                break;
+            }
+        }
+        
+        // ✅ Validate based on mode
+        var customerId = null;
+        var customerName = null;
+        var customerMobile = null;
+        
+        if (isWalkin) {
+            // ✅ WALK-IN: Skip customer validation
+            console.log("🚶 Walk-in customer - skipping validation");
+            customerId = null;
+            customerName = 'Walk-in Customer';
+            customerMobile = 'N/A';
+        } else if (isExisting) {
+            // ✅ EXISTING: Validate customer selection
+            var customerSelect = document.getElementById('customer_id_' + entryId);
+            customerId = customerSelect ? customerSelect.value : null;
+            
+            if (!customerId) {
+                showEntryError(entryId, 'Customer', 'Select an existing customer before saving this entry.');
+                return;
+            }
+            
+            var selectedOption = customerSelect.options[customerSelect.selectedIndex];
+            customerName = selectedOption ? selectedOption.text.split('(')[0].trim() : '';
+        } else {
+            // ✅ NEW: Validate name
+            customerName = document.querySelector('input[name="new_name_' + entryId + '"]').value;
+            customerMobile = document.querySelector('input[name="new_mobile_' + entryId + '"]').value.trim();
+            
+            if (!customerName) {
+                showEntryError(entryId, 'New customer name', 'Enter a customer name before saving this entry.');
+                return;
+            }
+        }
+        
+        // ✅ Collect product data
+        var products = [];
+        var productRows = block.querySelectorAll('#productsTable_' + entryId + ' tbody tr');
+        
+        productRows.forEach(function(row) {
+            var productSelect = row.querySelector('.product-select');
+            var productId = productSelect ? productSelect.value : null;
+            var opt = productSelect && productSelect.selectedIndex >= 0 ? productSelect.options[productSelect.selectedIndex] : null;
+            var isQtyOnly = opt ? (opt.getAttribute('data-is-qty-only') === 'true') : false;
+            var isFillingOnly = opt ? (opt.getAttribute('data-is-filling-only') === 'true') : false;
+            
+            var saleQuantity = parseFloat(row.querySelector('.sale-quantity').value) || 0;
+            var fullQuantity = parseFloat(row.querySelector('.quantity').value) || 0;
+            var emptyReturned = parseFloat(row.querySelector('.empty-return').value) || 0;
+            var cylinderMovement = row.querySelector('.customer-cylinder-movement')?.value || '';
+            
+            // Get damage charges
+            var damageCharges = parseFloat(row.querySelector('.damage-charges').value) || 0;
+            var damageDescription = row.querySelector('.damage-description') ? row.querySelector('.damage-description').value || '' : '';
+            
+            var isSaleOnly = (saleQuantity > 0 || isQtyOnly || isFillingOnly);
+            var quantity = isSaleOnly ? saleQuantity : fullQuantity;
+            if (isSaleOnly || isFillingOnly) {
+                emptyReturned = 0;
+            }
+            if (cylinderMovement) {
+                quantity = 0;
+                saleQuantity = 0;
+                emptyReturned = Math.abs(emptyReturned);
+            }
+            
+            var rate = parseFloat(row.querySelector('.product-price').value) || 0;
+            var deliveryCharges = parseFloat(row.querySelector('.delivery-charges').value) || 0;
+            var paymentAmount = parseFloat(row.querySelector('.payment-amount').value) || 0;
+            var paymentType = row.querySelector('.payment-type').value;
+            var invoiceNo = row.querySelector('.invoice-no').value;
+            var description = row.querySelector('.description-input').value;
+            var fullReturned = parseInt(row.querySelector('.full-returned-qty')?.value) || 0;
+            var fullReturnedValue = parseFloat(row.querySelector('.full-returned-val')?.value) || 0;
+            var fullReturnedPaid = row.querySelector('.full-returned-paid')?.value === 'true';
+            
+            // Get low pressure details
+            var lpDetails = [];
+            var lpItems = row.querySelectorAll('.low-pressure-item');
+            lpItems.forEach(function(lp) {
+                var stdP = parseFloat(lp.querySelector('.std-pressure').value) || 2000;
+                var actP = parseFloat(lp.querySelector('.act-pressure').value) || 0;
+                var cPrice = parseFloat(lp.querySelector('.calc-price').value) || 0;
+                if (actP > 0) {
+                    lpDetails.push({
+                        total_pressure: stdP,
+                        actual_pressure: actP,
+                        calculated_price: cPrice
+                    });
+                }
+            });
+            
+            // Check if there's a product OR damage charges OR low pressure
+            var hasValidProduct = productId && (quantity > 0 || emptyReturned > 0 || fullReturned > 0);
+            var hasDamageOnly = damageCharges > 0;
+            var hasLowPressureOnly = lpDetails.length > 0;
+            var hasPaymentOnly = !productId && paymentAmount > 0;
+            
+            if (hasValidProduct || hasDamageOnly || hasLowPressureOnly || hasPaymentOnly) {
+                products.push({
+                    product_id: productId,
+                    quantity: quantity,
+                    sale_quantity: saleQuantity,
+                    empty_returned: emptyReturned,
+                    cylinder_movement_type: cylinderMovement,
+                    rate: rate,
+                    delivery_charges: deliveryCharges,
+                    damage_charges: damageCharges,
+                    damage_description: damageDescription,
+                    low_pressure_details: lpDetails,
+                    payment_amount: paymentAmount,
+                    payment_type: paymentType,
+                    invoice_no: invoiceNo,
+                    description: description,
+                    full_returned: fullReturned,
+                    full_returned_value: fullReturnedValue,
+                    full_returned_paid: fullReturnedPaid
+                });
+            }
+        });
+        
+        // Check if there are any products or damage charges
+        if (products.length === 0) {
+            // Check if there are damage charges in any row
+            var hasDamageOnly = false;
+            productRows.forEach(function(row) {
+                var damageCharges = parseFloat(row.querySelector('.damage-charges').value) || 0;
+                if (damageCharges > 0) {
+                    hasDamageOnly = true;
+                }
+            });
+            
+            if (hasDamageOnly) {
+                // Create a dummy product entry for damage charges
+                var firstRow = productRows[0];
+                var damageCharges = parseFloat(firstRow.querySelector('.damage-charges').value) || 0;
+                var damageDescription = firstRow.querySelector('.damage-description') ? firstRow.querySelector('.damage-description').value || '' : '';
+                var paymentAmount = parseFloat(firstRow.querySelector('.payment-amount').value) || 0;
+                var paymentType = firstRow.querySelector('.payment-type').value;
+                var invoiceNo = firstRow.querySelector('.invoice-no').value;
+                var description = firstRow.querySelector('.description-input').value;
+                
+                products.push({
+                    product_id: null,
+                    quantity: 0,
+                    sale_quantity: 0,
+                    empty_returned: 0,
+                    rate: 0,
+                    delivery_charges: 0,
+                    damage_charges: damageCharges,
+                    damage_description: damageDescription,
+                    payment_amount: paymentAmount,
+                    payment_type: paymentType,
+                    invoice_no: invoiceNo,
+                    description: description || 'Damage charges only'
+                });
+            } else {
+                showEntryError(entryId, 'Product / payment details', 'Add a product, damage charge, or payment amount before saving this entry.');
+                return;
+            }
+        }
+        
+        // ✅ Prepare entry data
+        var entryData = {
+            customer_id: customerId,
+            customer_type: isWalkin ? 'walkin' : (isExisting ? 'existing' : 'new'),
+            is_existing: isExisting,
+            is_walkin: isWalkin,
+            products: products,
+            entry_number: entryId,
+            selected_date: currentDate
+        };
+        
+        if (isWalkin) {
+            var walkinNameInput = document.getElementById('walkin_name_' + entryId);
+            var walkinMobileInput = document.getElementById('walkin_mobile_' + entryId);
+            var walkinSecurityInput = document.getElementById('walkin_security_' + entryId);
+            var walkinPersonalInput = document.getElementById('walkin_personal_' + entryId);
+
+            entryData.walkin_name = walkinNameInput ? walkinNameInput.value.trim() : '';
+            entryData.walkin_mobile = walkinMobileInput ? walkinMobileInput.value.trim() : '';
+            entryData.security_deposit = walkinSecurityInput ? (parseFloat(walkinSecurityInput.value) || 0) : 0;
+            entryData.personal_cylinders = walkinPersonalInput ? (parseInt(walkinPersonalInput.value) || 0) : 0;
+            entryData.walkin_customer_name = entryData.walkin_name || 'Walk-in Customer';
+            entryData.walkin_customer_mobile = entryData.walkin_mobile || 'N/A';
+        } else if (!isExisting) {
+            entryData.new_customer_name = customerName;
+            entryData.new_customer_mobile = customerMobile;
+            entryData.security_deposit = parseFloat(document.querySelector('input[name="new_security_' + entryId + '"]').value) || 0;
+            entryData.personal_cylinders = parseInt(document.querySelector('input[name="new_personal_cylinders_' + entryId + '"]').value) || 0;
+        }
+        
+        console.log("Sending entry data:", entryData);
+        
+        // Show loading on button
+        var originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+        button.disabled = true;
+        
+        // Send to backend
+        fetch('{% url "deliveries:daily_entry" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                entry_data: entryData,
+                save_type: 'individual'
+            })
+        })
+        .then(response => response.json())
+        .then(result => {
+            console.log("🟢 Server response:", result);
+            if (result.success) {
+                showToast('✅ ' + (isWalkin ? 'Walk-in ' : '') + 'Entry saved successfully!', 'success');
+                setTimeout(function() {
+                    location.reload();
+                }, 1500);
+            } else {
+                showEntryError(entryId, result.location || 'Entry details', result.error || 'Failed to save entry');
+            }
+        })
+        .catch(error => {
+            console.error("🔴 Error:", error);
+            showEntryError(entryId, 'Entry save request', error.message || 'A network error prevented this entry from being saved.');
+        })
+        .finally(() => {
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
+    }    
+    // ============================================================
+    // Toggle Customer Type
+    // ============================================================
+    function toggleCustomerType(id) {
+        var radios = document.getElementsByName('customer_type_' + id);
+        var isExisting = false;
+        for (var i = 0; i < radios.length; i++) {
+            if (radios[i].checked && radios[i].value === 'existing') {
+                isExisting = true;
+                break;
+            }
+        }
+        
+        document.querySelector('.existing-customer-' + id).style.display = isExisting ? 'block' : 'none';
+        document.querySelector('.new-customer-' + id).style.display = isExisting ? 'none' : 'block';
+        
+        if (!isExisting) {
+            var balanceDiv = document.getElementById('customerBalanceDisplay_' + id);
+            if (balanceDiv) {
+                balanceDiv.style.display = 'block';
+                balanceDiv.style.backgroundColor = '#f3f4f6';
+                balanceDiv.style.border = '1px solid #d1d5db';
+                balanceDiv.style.color = '#6b7280';
+                balanceDiv.innerHTML = '<span>👤 New customer - No balance history</span>';
+            }
+        }
+    }
+    
+    // ============================================================
+    // Add Product Row
+    // ============================================================
+    function addProductRow(id) {
+        var tbody = document.querySelector('#productsTable_' + id + ' tbody');
+        var newRow = document.createElement('tr');
+        newRow.className = 'product-row';
+        
+        var productSelects = document.querySelectorAll('#productsTable_' + id + ' .product-select');
+        var firstSelect = productSelects[0];
+        var optionsHTML = firstSelect ? firstSelect.innerHTML : '';
+        
+
+        // In the product row, replace the Damage Charges column with this (NO description)
+        newRow.innerHTML = `
+            <td>
+                <input type="text" name="invoice_numbers_${id}[]" class="form-control form-control-sm invoice-no" 
+                    placeholder="Invoice" style="font-size: 0.8rem;">
+            </td>
+            <td>
+                <select name="product_ids_${id}[]" id="product_id_${id}_${Date.now()}" class="form-select form-select-sm product-select" 
+                    onchange="updateProductPrice(this, ${id})">
+                    ${optionsHTML}
+                </select>
+            </td>
+            <td>
+                <input type="number" name="empty_returns_${id}[]" class="form-control form-control-sm empty-return text-center" 
+                    min="0" step="1" value="0" placeholder="Empty" oninput="onEmptyOrFullChange(this, ${id})" onchange="calculateRowTotal(this, ${id})" style="font-size: 0.8rem; width: 50px;">
+                <select name="cylinder_movements_${id}[]" class="form-select form-select-sm customer-cylinder-movement mt-1" onchange="toggleEmptyReturnMode(this, ${id})" style="font-size: 0.68rem;">
+                    <option value="">Normal</option>
+                    <option value="customer_received">Extra received</option>
+                    <option value="customer_returned">Return to customer</option>
+                </select>
+            </td>
+            <td>
+                <input type="number" name="quantities_${id}[]" class="form-control form-control-sm quantity text-center" 
+                    min="0" step="0.1" placeholder="Qty kg" oninput="onEmptyOrFullChange(this, ${id})" onchange="calculateRowTotal(this, ${id})" style="font-size: 0.8rem; width: 50px;">
+            </td>
+            <td>
+                <input type="number" name="sale_quantities_${id}[]" class="form-control form-control-sm sale-quantity text-center fw-bold text-primary" 
+                    min="0" step="1" value="0" placeholder="Sale" oninput="onSaleQtyChange(this, ${id})" onchange="calculateRowTotal(this, ${id})" style="font-size: 0.8rem; width: 50px;">
+            </td>
+            <td>
+                <input type="number" name="product_prices_${id}[]" class="form-control form-control-sm product-price text-end" 
+                    step="0.01" min="0" placeholder="Rate" onchange="calculateRowTotal(this, ${id})" style="font-size: 0.8rem; width: 75px;">
+            </td>
+            <td>
+                <input type="text" class="form-control form-control-sm row-total text-end fw-bold" 
+                    readonly value="0.00" placeholder="Total" style="font-size: 0.8rem; width: 80px;">
+            </td>
+            <td>
+                <input type="number" name="delivery_charges_${id}[]" class="form-control form-control-sm delivery-charges text-end" 
+                    step="0.01" min="0" placeholder="Delivery" style="font-size: 0.85rem; width: 70px;" 
+                    onchange="calculateRowTotal(this, ${id})">
+            </td>
+            <!-- Damage Charges Column - Amount ONLY (NO description) -->
+            <td>
+                <input type="number" name="damage_charges_${id}[]" 
+                    class="form-control form-control-sm damage-charges text-end text-danger fw-bold" 
+                    step="0.01" min="0" placeholder="Damage" 
+                    style="font-size: 0.8rem; width: 80px; border-color: #dc3545;" 
+                    onchange="calculateRowTotal(this, ${id})">
+            </td>
+            <td>
+                <input type="number" name="payment_amount_${id}[]" class="form-control form-control-sm payment-amount text-end" 
+                    step="0.01" min="0" placeholder="Payment" style="font-size: 0.8rem; width: 80px;" 
+                    onchange="updateRowPaymentStatus(this, ${id})">
+            </td>
+            <td>
+                <select name="payment_type_${id}[]" class="form-select form-select-sm payment-type" style="font-size: 0.75rem; width: 80px;">
+                    <option value="cash">Cash</option>
+                    <option value="transfer">Transfer</option>
+                    <option value="upi">UPI</option>
+                </select>
+            </td>
+            <td>
+                <input type="text" name="description_${id}[]" class="form-control form-control-sm description-input" 
+                    placeholder="Description" style="font-size: 0.75rem; width: 100%; min-width: 100px;">
+                <input type="hidden" name="low_pressure_json_${id}[]" class="lp-json-input">
+                
+                <!-- Full Cylinder Return Container -->
+                <div class="full-return-container mt-1 p-1 bg-info-subtle border border-info rounded" style="display: none; font-size: 0.75rem;">
+                    <div class="d-flex align-items-center gap-1 flex-wrap">
+                        <span class="badge bg-info text-dark" style="font-size: 0.68rem;"><i class="fas fa-undo me-1"></i>Full Return</span>
+                        <div class="input-group input-group-sm" style="width: 95px;">
+                            <span class="input-group-text py-0 px-1" style="font-size: 0.7rem;">Qty</span>
+                            <input type="number" name="full_returned_${id}[]" class="form-control form-control-sm full-returned-qty text-center fw-bold text-info" value="0" min="0" step="1" style="font-size: 0.72rem;">
+                        </div>
+                        <div class="input-group input-group-sm" style="width: 135px;">
+                            <span class="input-group-text py-0 px-1" style="font-size: 0.7rem;">Value PKR</span>
+                            <input type="number" name="full_returned_value_${id}[]" class="form-control form-control-sm full-returned-val text-end fw-bold text-success" value="0.00" min="0" step="0.01" style="font-size: 0.72rem;">
+                        </div>
+                        <select name="full_returned_paid_${id}[]" class="form-select form-select-sm full-returned-paid" style="width: 130px; font-size: 0.7rem;">
+                            <option value="false">💳 Credit Account</option>
+                            <option value="true">💵 Paid Cash On Spot</option>
+                        </select>
+                    </div>
+                </div>
+            </td>
+            <td class="text-center">
+                <div class="d-flex gap-1 justify-content-center">
+                    <button type="button" class="btn btn-info btn-sm py-1 px-1 text-white full-return-action" 
+                            onclick="openFullReturnModal(this, ${id})" 
+                            title="Record Full Cylinder Returned by Customer" style="font-size: 0.72rem;">
+                        <i class="fas fa-undo me-1"></i>Full Return
+                    </button>
+                    <button type="button" class="btn btn-warning btn-sm py-1 px-1 low-pressure-action" 
+                            onclick="openLowPressureModal(this, ${id})" 
+                            title="Add Low Pressure Cylinder" style="font-size: 0.72rem;">
+                        <i class="fas fa-tachometer-alt me-1"></i>Low Press
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm py-1 px-2" 
+                            onclick="removeProductRow(this, ${id})" 
+                            style="font-size: 0.8rem;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="row-detail-summary mt-2" aria-live="polite">
+                    <div class="row-detail-summary-title"><i class="fas fa-calculator me-1"></i>Calculation Preview</div>
+                    <div class="row-detail-summary-body"><span class="text-muted">Select a product and enter values to see the calculation.</span></div>
+                </div>
+            </td>
+        `;
+        
+        tbody.appendChild(newRow);
+        updateSummary(id);
+    }
+    
+    // ============================================================
+    // Product detail modal helpers
+    // ============================================================
+    var productDetailsModal = null;
+    var productDetailsMode = null;
+    var productDetailsRow = null;
+    var productDetailsContainer = null;
+    var productDetailsParent = null;
+    var productDetailsEntryId = null;
+
+    function openProductDetailsModal(mode, button, entryId) {
+        var row = button.closest('tr');
+        var parent = row.querySelector('.description-input').parentNode;
+        var container = mode === 'full-return'
+            ? parent.querySelector('.full-return-container')
+            : parent.querySelector('.low-pressure-container');
+
+        if (!container && mode === 'low-pressure') {
+            container = document.createElement('div');
+            container.className = 'low-pressure-container';
+            parent.appendChild(container);
+        }
+        if (!container) return;
+
+        productDetailsMode = mode;
+        productDetailsRow = row;
+        productDetailsContainer = container;
+        productDetailsParent = parent;
+        productDetailsEntryId = entryId;
+
+        var title = mode === 'full-return' ? 'Full Cylinder Return' : 'Low Pressure Cylinder';
+        var help = mode === 'full-return'
+            ? 'Record the full cylinders returned, their credit value, and whether cash was paid on the spot.'
+            : 'Add each low-pressure cylinder and enter its standard and actual pressure.';
+        document.getElementById('productDetailsModalTitle').textContent = title;
+        document.getElementById('productDetailsModalHelp').textContent = help;
+
+        var body = document.getElementById('productDetailsModalBody');
+        body.innerHTML = '';
+        if (mode === 'low-pressure') {
+            var addButton = document.createElement('button');
+            addButton.type = 'button';
+            addButton.className = 'btn btn-outline-warning mb-3';
+            addButton.innerHTML = '<i class="fas fa-plus me-1"></i>Add Another Low Pressure Cylinder';
+            addButton.onclick = function() {
+                addLowPressureItem(productDetailsContainer, productDetailsRow, productDetailsEntryId);
+            };
+            body.appendChild(addButton);
+        }
+        body.appendChild(container);
+        container.style.display = 'block';
+
+        if (mode === 'full-return') {
+            var qtyInput = container.querySelector('.full-returned-qty');
+            var valueInput = container.querySelector('.full-returned-val');
+            var unitPrice = parseFloat(row.querySelector('.product-price').value) || 0;
+            if (parseFloat(qtyInput.value) <= 0) qtyInput.value = 1;
+            if (parseFloat(valueInput.value) <= 0 && unitPrice > 0) valueInput.value = unitPrice.toFixed(2);
+        } else if (!container.querySelector('.low-pressure-item')) {
+            addLowPressureItem(container, row, entryId);
+        }
+
+        if (!productDetailsModal) {
+            productDetailsModal = new bootstrap.Modal(document.getElementById('productDetailsModal'), {
+                backdrop: 'static'
+            });
+        }
+        productDetailsModal.show();
+    }
+
+    function openFullReturnModal(button, entryId) {
+        openProductDetailsModal('full-return', button, entryId);
+    }
+
+    function openLowPressureModal(button, entryId) {
+        openProductDetailsModal('low-pressure', button, entryId);
+    }
+
+    function saveProductDetailsModal() {
+        if (!productDetailsContainer || !productDetailsParent) return;
+        productDetailsParent.appendChild(productDetailsContainer);
+        productDetailsContainer.style.display = 'none';
+        calculateRowTotal(productDetailsRow.querySelector('.product-price'), productDetailsEntryId);
+        productDetailsModal.hide();
+        productDetailsContainer = null;
+        productDetailsRow = null;
+        productDetailsParent = null;
+    }
+
+    document.getElementById('productDetailsModal').addEventListener('hidden.bs.modal', function() {
+        if (productDetailsContainer && productDetailsParent) {
+            productDetailsParent.appendChild(productDetailsContainer);
+            productDetailsContainer.style.display = 'none';
+        }
+        productDetailsContainer = null;
+        productDetailsRow = null;
+        productDetailsParent = null;
+    });
+    
+    // ============================================================
+    // Remove Product Row
+    // ============================================================
+    function removeProductRow(button, id) {
+        var tbody = document.querySelector('#productsTable_' + id + ' tbody');
+        if (tbody.rows.length > 1) {
+            button.closest('tr').remove();
+            updateSummary(id);
+        } else {
+            alert('You must keep at least one product row.');
+        }
+    }
+    
+    // ============================================================
+    // LOW PRESSURE CYLINDER FUNCTIONS
+    // ============================================================
+    function addLowPressureItem(lpContainer, row, entryId) {
+        var count = lpContainer.querySelectorAll('.low-pressure-item').length + 1;
+        var lpItem = document.createElement('div');
+        lpItem.className = 'low-pressure-item mb-2 p-3 bg-white border rounded';
+        lpItem.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="badge bg-warning text-dark"><i class="fas fa-tachometer-alt me-1"></i>Low Pressure #${count}</span>
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeLowPressureItem(this, ${entryId})"><i class="fas fa-trash me-1"></i>Remove</button>
+            </div>
+            <div class="row g-2">
+                <div class="col-md-4"><label class="form-label">Standard Pressure (PSI)</label><input type="number" class="form-control std-pressure" placeholder="2000" value="2000" min="1" step="1" oninput="calculateLowPressurePrice(this, ${entryId})"></div>
+                <div class="col-md-4"><label class="form-label">Actual Pressure (PSI)</label><input type="number" class="form-control act-pressure fw-bold" placeholder="1400" value="1400" min="0" step="1" oninput="calculateLowPressurePrice(this, ${entryId})"></div>
+                <div class="col-md-4"><label class="form-label">Calculated Value (PKR)</label><input type="number" class="form-control calc-price fw-bold text-danger" readonly value="0.00"></div>
+            </div>
+        `;
+        
+        lpContainer.appendChild(lpItem);
+        
+        // Auto-calculate for this new item
+        var actInput = lpItem.querySelector('.act-pressure');
+        calculateLowPressurePrice(actInput, entryId);
+    }
+
+    function addLowPressureCylinder(button, entryId) {
+        openLowPressureModal(button, entryId);
+    }
+
+    function removeLowPressureItem(btn, entryId) {
+        var item = btn.closest('.low-pressure-item');
+        var row = btn.closest('tr') || productDetailsRow;
+        var container = btn.closest('.low-pressure-container');
+        item.remove();
+        if (container && container.querySelectorAll('.low-pressure-item').length === 0) {
+            container.remove();
+        }
+        if (row) calculateRowTotal(row.querySelector('.product-price'), entryId);
+    }
+
+    function calculateLowPressurePrice(input, entryId) {
+        var row = input.closest('tr') || productDetailsRow;
+        var lpItem = input.closest('.low-pressure-item');
+        if (!row || !lpItem) return;
+        var unitPrice = parseFloat(row.querySelector('.product-price').value) || 0;
+        var stdPressure = parseFloat(lpItem.querySelector('.std-pressure').value) || 2000;
+        var actPressure = parseFloat(lpItem.querySelector('.act-pressure').value) || 0;
+        
+        var calcPrice = 0;
+        if (stdPressure > 0 && actPressure >= 0) {
+            calcPrice = (unitPrice / stdPressure) * actPressure;
+        }
+        
+        lpItem.querySelector('.calc-price').value = calcPrice.toFixed(2);
+        calculateRowTotal(row.querySelector('.product-price'), entryId);
+    }
+
+    // ============================================================
+    // Input Event Handlers (Sale Qty vs Empty/Full)
+    // ============================================================
+    function onSaleQtyChange(input, id) {
+        var row = input.closest('tr');
+        var saleVal = parseFloat(input.value) || 0;
+        if (saleVal > 0) {
+            row.querySelector('.empty-return').value = 0;
+            row.querySelector('.quantity').value = 0;
+            input.style.backgroundColor = '#d1fae5';
+            input.style.borderColor = '#10b981';
+        } else {
+            input.style.backgroundColor = '';
+            input.style.borderColor = '';
+        }
+        calculateRowTotal(input, id);
+    }
+
+    function onEmptyOrFullChange(input, id) {
+        var row = input.closest('tr');
+        var emptyVal = parseFloat(row.querySelector('.empty-return').value) || 0;
+        var fullVal = parseFloat(row.querySelector('.quantity').value) || 0;
+        if (emptyVal > 0 || fullVal > 0) {
+            var saleInput = row.querySelector('.sale-quantity');
+            saleInput.value = 0;
+            saleInput.style.backgroundColor = '';
+            saleInput.style.borderColor = '';
+        }
+        calculateRowTotal(input, id);
+    }
+
+    function toggleEmptyReturnMode(select, id) {
+        var row = select.closest('tr');
+        var fields = row.querySelectorAll('.quantity, .sale-quantity, .product-price, .delivery-charges, .damage-charges, .payment-amount, .payment-type');
+        fields.forEach(function(field) {
+            field.disabled = Boolean(select.value);
+            if (select.value && field.matches('.quantity, .sale-quantity, .delivery-charges, .damage-charges, .payment-amount')) {
+                field.value = field.classList.contains('payment-type') ? 'cash' : '0';
+            }
+        });
+        row.querySelector('.empty-return').setAttribute('aria-label', select.value === 'customer_returned' ? 'Customer-owned empty cylinders returned' : select.value === 'customer_received' ? 'Extra customer-owned empty cylinders received' : 'Empty cylinders returned by customer');
+        calculateRowTotal(row.querySelector('.empty-return'), id);
+    }
+    
+    // ============================================================
+    // Update Row Payment Status
+    // ============================================================
+    function updateRowPaymentStatus(element, id) {
+        var row = element.closest('tr');
+        var paymentAmount = parseFloat(row.querySelector('.payment-amount').value) || 0;
+        
+        if (paymentAmount > 0) {
+            row.style.backgroundColor = '#d4edda';
+        } else {
+            row.style.backgroundColor = '';
+        }
+    }
+    
+    // ============================================================
+    // Calculate Row Total - WITH DAMAGE CHARGES AND LOW PRESSURE
+    // ============================================================
+    function calculateRowTotal(element, id) {
+        var row = element.closest('tr') || productDetailsRow;
+        if (!row) return;
+        var saleQty = parseFloat(row.querySelector('.sale-quantity').value) || 0;
+        var fullQty = parseFloat(row.querySelector('.quantity').value) || 0;
+        var unitPrice = parseFloat(row.querySelector('.product-price').value) || 0;
+        var deliveryCharges = parseFloat(row.querySelector('.delivery-charges').value) || 0;
+        var damageCharges = parseFloat(row.querySelector('.damage-charges').value) || 0;
+        var fullReturnValue = parseFloat(row.querySelector('.full-returned-val')?.value) || 0;
+        
+        // Recalculate any low pressure items first & serialize to hidden JSON
+        var lpItems = row.querySelectorAll('.low-pressure-item');
+        var sumLowPressurePrices = 0;
+        var numLowPressure = lpItems.length;
+        var lpDetailsList = [];
+        
+        lpItems.forEach(function(lp) {
+            var stdPressure = parseFloat(lp.querySelector('.std-pressure').value) || 2000;
+            var actPressure = parseFloat(lp.querySelector('.act-pressure').value) || 0;
+            var calcPrice = 0;
+            if (stdPressure > 0 && actPressure >= 0) {
+                calcPrice = (unitPrice / stdPressure) * actPressure;
+            }
+            lp.querySelector('.calc-price').value = calcPrice.toFixed(2);
+            sumLowPressurePrices += calcPrice;
+            
+            if (actPressure > 0) {
+                lpDetailsList.push({
+                    total_pressure: stdPressure,
+                    actual_pressure: actPressure,
+                    calculated_price: calcPrice
+                });
+            }
+        });
+        
+        // Update hidden JSON input for standard form POST
+        var jsonInput = row.querySelector('.lp-json-input');
+        if (jsonInput) {
+            jsonInput.value = lpDetailsList.length > 0 ? JSON.stringify(lpDetailsList) : '';
+        }
+        
+        var productCost = 0;
+        if (numLowPressure > 0 && fullQty > 0) {
+            var remainingFullQty = Math.max(0, fullQty - numLowPressure);
+            productCost = (remainingFullQty * unitPrice) + sumLowPressurePrices;
+        } else {
+            var qty = saleQty > 0 ? saleQty : fullQty;
+            productCost = (qty * unitPrice) + sumLowPressurePrices;
+        }
+        
+        var total = productCost + deliveryCharges + damageCharges - fullReturnValue;
+        row.querySelector('.row-total').value = total.toFixed(2);
+        
+        // Highlight damage charges if > 0
+        var damageInput = row.querySelector('.damage-charges');
+        if (damageCharges > 0) {
+            damageInput.style.backgroundColor = '#f8d7da';
+            damageInput.style.borderColor = '#dc3545';
+        } else {
+            damageInput.style.backgroundColor = '';
+            damageInput.style.borderColor = '#dc3545';
+        }
+
+        updateRowDetailSummary(row, {
+            saleQty: saleQty,
+            fullQty: fullQty,
+            unitPrice: unitPrice,
+            productCost: productCost,
+            lowPressureCount: numLowPressure,
+            lowPressureTotal: sumLowPressurePrices,
+            deliveryCharges: deliveryCharges,
+            damageCharges: damageCharges,
+            fullReturnQty: parseFloat(row.querySelector('.full-returned-qty')?.value) || 0,
+            fullReturnValue: fullReturnValue,
+            total: total
+        });
+        
+        updateSummary(id);
+    }
+
+    function updateRowDetailSummary(row, values) {
+        var summary = row.querySelector('.row-detail-summary');
+        if (!summary) return;
+        var body = summary.querySelector('.row-detail-summary-body');
+        var fullReturnPaid = row.querySelector('.full-returned-paid')?.value === 'true';
+        var hasDetails = values.lowPressureCount > 0 || values.fullReturnQty > 0 || values.deliveryCharges > 0 || values.damageCharges > 0 || values.saleQty > 0 || values.fullQty > 0;
+
+        var fullReturnButton = row.querySelector('.full-return-action');
+        var lowPressureButton = row.querySelector('.low-pressure-action');
+        if (fullReturnButton) {
+            fullReturnButton.classList.toggle('detail-active', values.fullReturnQty > 0);
+            fullReturnButton.setAttribute('data-status', values.fullReturnQty > 0 ? 'Added' : '');
+            fullReturnButton.innerHTML = values.fullReturnQty > 0
+                ? '<i class="fas fa-check me-1"></i>Full Return (' + values.fullReturnQty + ')'
+                : '<i class="fas fa-undo me-1"></i>Full Return';
+        }
+        if (lowPressureButton) {
+            lowPressureButton.classList.toggle('detail-active', values.lowPressureCount > 0);
+            lowPressureButton.setAttribute('data-status', values.lowPressureCount > 0 ? values.lowPressureCount + ' added' : '');
+            lowPressureButton.innerHTML = values.lowPressureCount > 0
+                ? '<i class="fas fa-check me-1"></i>Low Press (' + values.lowPressureCount + ')'
+                : '<i class="fas fa-tachometer-alt me-1"></i>Low Press';
+        }
+
+        if (!hasDetails) {
+            body.innerHTML = '<span class="text-muted">Select a product and enter values to see the calculation.</span>';
+            return;
+        }
+
+        var lines = [];
+        var baseQty = values.saleQty > 0 ? values.saleQty : values.fullQty;
+        if (baseQty > 0) lines.push('<span><b>Base:</b> ' + baseQty + ' x PKR ' + values.unitPrice.toFixed(2) + ' = PKR ' + (baseQty * values.unitPrice).toFixed(2) + '</span>');
+        if (values.lowPressureCount > 0) lines.push('<span class="text-warning-emphasis"><b>Low pressure:</b> ' + values.lowPressureCount + ' cylinder(s) = PKR ' + values.lowPressureTotal.toFixed(2) + '</span>');
+        if (values.deliveryCharges > 0) lines.push('<span><b>Delivery:</b> + PKR ' + values.deliveryCharges.toFixed(2) + '</span>');
+        if (values.damageCharges > 0) lines.push('<span class="text-danger"><b>Damage:</b> + PKR ' + values.damageCharges.toFixed(2) + '</span>');
+        if (values.fullReturnQty > 0) lines.push('<span class="text-info"><b>Full return:</b> ' + values.fullReturnQty + ' cylinder(s), - PKR ' + values.fullReturnValue.toFixed(2) + (fullReturnPaid ? ' (cash paid)' : ' (account credit)') + '</span>');
+        lines.push('<strong class="row-detail-total">Total payable: PKR ' + values.total.toFixed(2) + '</strong>');
+        body.innerHTML = lines.join('');
+    }
+    
+    // ============================================================
+    // Update Product Price & Enable/Disable MT vs Sale Qty
+    // ============================================================
+    function updateProductPrice(select, id) {
+        var row = select.closest('tr');
+        var opt = select.options[select.selectedIndex];
+        var price = opt ? (opt.getAttribute('data-price') || 0) : 0;
+        var isQtyOnly = opt ? (opt.getAttribute('data-is-qty-only') === 'true') : false;
+        var isFillingOnly = opt ? (opt.getAttribute('data-is-filling-only') === 'true') : false;
+        
+        row.querySelector('.product-price').value = price;
+        
+        var emptyInput = row.querySelector('.empty-return');
+        var fullInput = row.querySelector('.quantity');
+        var saleInput = row.querySelector('.sale-quantity');
+        
+        if (isQtyOnly || isFillingOnly) {
+            emptyInput.value = 0;
+            fullInput.value = 0;
+            saleInput.style.backgroundColor = '#d1fae5';
+            saleInput.style.borderColor = '#10b981';
+            var curSale = parseFloat(saleInput.value) || 0;
+            if (curSale === 0) saleInput.value = isFillingOnly ? 1 : 1;
+        } else {
+            saleInput.value = 0;
+            saleInput.style.backgroundColor = '';
+            saleInput.style.borderColor = '';
+            var curFull = parseFloat(fullInput.value) || 0;
+            var curEmpty = parseFloat(emptyInput.value) || 0;
+            if (curFull === 0 && curEmpty === 0 && opt && opt.value) fullInput.value = 1;
+        }
+        
+        calculateRowTotal(select, id);
+    }
+    
+    // ============================================================
+    // Update Summary - WITH DAMAGE CHARGES
+    // ============================================================
+    function updateSummary(id) {
+        var rows = document.querySelectorAll('#productsTable_' + id + ' tbody tr.product-row');
+        var totalAmount = 0;
+        var totalDamageCharges = 0;  // NEW
+        
+        rows.forEach(function(row) {
+            var saleQty = parseFloat(row.querySelector('.sale-quantity').value) || 0;
+            var fullQty = parseFloat(row.querySelector('.quantity').value) || 0;
+            var qty = saleQty > 0 ? saleQty : fullQty;
+            var price = parseFloat(row.querySelector('.product-price').value) || 0;
+            var deliveryCharges = parseFloat(row.querySelector('.delivery-charges').value) || 0;
+            var damageCharges = parseFloat(row.querySelector('.damage-charges').value) || 0;  // NEW
+            var total = parseFloat(row.querySelector('.row-total').value) || ((qty * price) + deliveryCharges + damageCharges);
+            totalAmount += total;
+            totalDamageCharges += damageCharges;  // NEW
+        });
+        
+        document.getElementById('grandTotal_' + id).value = totalAmount.toFixed(2);
+        
+        // Show damage total if > 0 (optional)
+        var damageTotalElement = document.getElementById('damageTotal_' + id);
+        if (damageTotalElement) {
+            damageTotalElement.textContent = 'Damage: PKR ' + totalDamageCharges.toFixed(2);
+        }
+    }
+    
+    // ============================================================
+    // Add 100 Default Entries Button Handler
+    // ============================================================
+    function add100DefaultEntries() {
+        var container = document.getElementById('entriesContainer');
+        var blocks = container.querySelectorAll('.entry-block');
+        if (blocks.length === 1) {
+            var firstSelect = blocks[0].querySelector('select[name^="customer_id_"]');
+            if (firstSelect && !firstSelect.value) {
+                container.innerHTML = '';
+                entryCounter = 0;
+            }
+        }
+        
+        showToast('Adding 100 default entries...', 'info');
+        for (var i = 0; i < 100; i++) {
+            addEntryBlock(false);
+        }
+        updateEntryCount();
+        showToast('✅ 100 default entries added successfully!', 'success');
+    }
+    
+    // ============================================================
+    // Load Customers (BF System) Button Handler
+    // ============================================================
+    function loadBFCustomers() {
+        if (!customersData || customersData.length === 0) {
+            showToast('No customers found in system', 'warning');
+            return;
+        }
+        
+        var container = document.getElementById('entriesContainer');
+        var blocks = container.querySelectorAll('.entry-block');
+        if (blocks.length === 1) {
+            var firstSelect = blocks[0].querySelector('select[name^="customer_id_"]');
+            if (firstSelect && !firstSelect.value) {
+                container.innerHTML = '';
+                entryCounter = 0;
+            }
+        }
+        
+        showToast(`Loading ${customersData.length} customers into entry blocks...`, 'info');
+        
+        customersData.forEach(function(cust) {
+            addEntryBlock(false);
+            var currentId = entryCounter;
+            var selectEl = document.getElementById('customer_id_' + currentId);
+            if (selectEl) {
+                selectEl.value = cust.id;
+                loadCustomerBalance(cust.id, currentId);
+            }
+        });
+        
+        updateEntryCount();
+        showToast(`✅ Loaded ${customersData.length} customer entries!`, 'success');
+    }
+
+    // ============================================================
+    // DOM Ready - Initialize
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("🟢 DOM loaded - Initializing...");
+        
+        // ============================================================
+        // SCROLL TO TOP ON PAGE LOAD
+        // ============================================================
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+        
+        setTimeout(function() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }, 100);
+        
+        // Create 1 initial entry block by default instead of cluttering with 100 entries
+        var INITIAL_ENTRIES = 1;
+        for (var i = 0; i < INITIAL_ENTRIES; i++) {
+            addEntryBlock(false);
+        }
+        
+        // Update entry count
+        updateEntryCount();
+        
+        // Ensure we're at the top after entry is created
+        setTimeout(function() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }, 200);
+        
+        // Payment customer select
+        var paymentSelect = document.getElementById('payment_customer_id');
+        if (paymentSelect) {
+            paymentSelect.removeAttribute('onchange');
+            
+            paymentSelect.addEventListener('change', function(e) {
+                console.log("🟢 Payment customer changed:", this.value);
+                loadPaymentCustomerBalance(this.value);
+            });
+            
+            if (paymentSelect.value) {
+                console.log("🟢 Auto-loading balance for pre-selected customer:", paymentSelect.value);
+                setTimeout(function() {
+                    loadPaymentCustomerBalance(paymentSelect.value);
+                }, 300);
+            }
+        }
+    });
+
+    // ============================================================
+    // Dynamic customer change handlers (using event delegation)
+    // ============================================================
+    document.addEventListener('change', function(e){
+        if (e.target && e.target.id && e.target.id.startsWith('customer_id_')) {
+            let id = e.target.id.replace('customer_id_', '');
+            console.log("Entry customer changed:", id, e.target.value);
+            loadCustomerBalance(e.target.value, id);
+        }
+        
+        if (e.target && e.target.id === 'payment_customer_id') {
+            console.log("Payment customer changed (delegation):", e.target.value);
+            loadPaymentCustomerBalance(e.target.value);
+        }
+    });
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const editId = new URLSearchParams(window.location.search).get('edit_id');
+        if (editId && typeof openEditModal === 'function') {
+            openEditModal(editId);
+        }
+    });
+</script>
+
+
+<style>
+    /* ============================================================
+       ENTRY FORM - LARGER, MORE READABLE INPUTS
+       ============================================================ */
+    .entry-block {
+        background-color: #f8f9fa !important;
+        border: 1px solid #dee2e6 !important;
+        border-radius: 8px !important;
+        padding: 1.5rem !important;
+        margin-bottom: 1.5rem !important;
+    }
+
+    /* --- FIX: Increase size of ALL form controls in entry blocks --- */
+    .entry-block .form-control,
+    .entry-block .form-select {
+        font-size: 0.95rem !important;
+        padding: 0.5rem 0.75rem !important;
+        height: auto !important;
+        min-height: 42px !important;
+        border-radius: 6px !important;
+        border: 1.5px solid #ced4da !important;
+        background: #ffffff !important;
+        transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+    }
+
+    .entry-block .form-control:focus,
+    .entry-block .form-select:focus {
+        border-color: #86b7fe !important;
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25) !important;
+    }
+
+    /* Make input text more visible */
+    .entry-block .form-control,
+    .entry-block .form-select {
+        color: #212529 !important;
+        font-weight: 500 !important;
+        letter-spacing: 0.3px !important;
+    }
+
+    /* --- FIX: Product table inputs --- */
+    .daily-products-table .product-row input,
+    .daily-products-table .product-row select {
+        font-size: 0.95rem !important;
+        padding: 0.5rem 0.6rem !important;
+        min-height: 42px !important;
+        height: auto !important;
+        border-radius: 6px !important;
+        border: 1.5px solid #ced4da !important;
+        background: #ffffff !important;
+        width: 100% !important;
+        min-width: 70px !important;
+    }
+
+    /* Larger number inputs */
+    .daily-products-table .product-row input[type="number"] {
+        font-size: 0.95rem !important;
+        font-weight: 600 !important;
+        padding: 0.5rem 0.4rem !important;
+        text-align: center !important;
+    }
+
+    /* Larger product select */
+    .daily-products-table .product-row .product-select {
+        font-size: 0.9rem !important;
+        min-height: 42px !important;
+        padding: 0.4rem 0.6rem !important;
+    }
+
+    .daily-products-table-wrapper {
+        max-height: 65vh;
+        overflow: auto;
+        border: 1px solid #dee2e6;
+    }
+
+    .daily-products-table-header th {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        background-color: #f8f9fa !important;
+        box-shadow: 0 2px 0 rgba(0, 0, 0, 0.08);
+        white-space: normal;
+    }
+
+    /* --- FIX: Labels should be more visible --- */
+    .daily-products-table .product-row > td::before {
+        font-size: 0.75rem !important;
+        font-weight: 700 !important;
+        color: #1e293b !important;
+        margin-bottom: 6px !important;
+        letter-spacing: 0.5px !important;
+        text-transform: uppercase !important;
+    }
+
+    /* --- FIX: Column minimum widths - make them wider --- */
+    .daily-products-table .product-row > td {
+        padding: 10px 12px !important;
+        min-width: 85px !important;
+    }
+
+    .daily-products-table .product-row > td:nth-child(1) { min-width: 95px; }  /* Invoice */
+    .daily-products-table .product-row > td:nth-child(2) { min-width: 160px; } /* Product */
+    .daily-products-table .product-row > td:nth-child(3) { min-width: 85px; }  /* Empty */
+    .daily-products-table .product-row > td:nth-child(4) { min-width: 85px; }  /* Qty */
+    .daily-products-table .product-row > td:nth-child(5) { min-width: 85px; }  /* Sale */
+    .daily-products-table .product-row > td:nth-child(6) { min-width: 105px; } /* Rate */
+    .daily-products-table .product-row > td:nth-child(7) { min-width: 115px; } /* Total */
+    .daily-products-table .product-row > td:nth-child(8) { min-width: 115px; } /* Delivery */
+    .daily-products-table .product-row > td:nth-child(9) { min-width: 115px; } /* Damage */
+    .daily-products-table .product-row > td:nth-child(10) { min-width: 115px; } /* Payment */
+    .daily-products-table .product-row > td:nth-child(11) { min-width: 105px; } /* Pay Type */
+    .daily-products-table .product-row > td:nth-child(12) { min-width: 200px; } /* Description */
+    .daily-products-table .product-row > td:nth-child(13) { min-width: 130px; } /* Actions */
+
+    /* --- FIX: Description input should be wider and taller --- */
+    .daily-products-table .product-row .description-input {
+        font-size: 0.9rem !important;
+        min-height: 42px !important;
+        padding: 0.5rem 0.6rem !important;
+        width: 100% !important;
+        min-width: 160px !important;
+    }
+
+    /* --- FIX: Full return container --- */
+    .daily-products-table .product-row .full-return-container {
+        padding: 0.6rem !important;
+        margin-top: 6px !important;
+    }
+
+    .daily-products-table .product-row .full-return-container input,
+    .daily-products-table .product-row .full-return-container select {
+        min-height: 36px !important;
+        font-size: 0.85rem !important;
+        padding: 0.3rem 0.5rem !important;
+    }
+
+    /* --- FIX: Action buttons bigger --- */
+    .daily-products-table .product-row .btn {
+        min-height: 36px !important;
+        font-size: 0.8rem !important;
+        padding: 0.3rem 0.7rem !important;
+        border-radius: 6px !important;
+    }
+
+    /* --- FIX: Grand Total bigger --- */
+    #grandTotal {
+        font-size: 1.2rem !important;
+        min-height: 48px !important;
+        font-weight: 700 !important;
+        color: #0d6efd !important;
+        background: #e7f1ff !important;
+        border: 2px solid #0d6efd !important;
+        border-radius: 6px !important;
+        text-align: center !important;
+    }
+
+    /* --- FIX: Calculation preview more readable --- */
+    .row-detail-summary-body {
+        font-size: 0.82rem !important;
+        line-height: 1.6 !important;
+        padding: 4px 0 !important;
+    }
+
+    .row-detail-summary {
+        padding: 0.6rem !important;
+        border-radius: 6px !important;
+        margin-top: 6px !important;
+    }
+
+    .row-detail-total {
+        font-size: 0.9rem !important;
+        padding-top: 4px !important;
+        margin-top: 4px !important;
+    }
+
+    /* --- FIX: Customer selection area --- */
+    .entry-block .existing-customer-${id} select,
+    .entry-block .new-customer-${id} input {
+        min-height: 42px !important;
+        font-size: 0.95rem !important;
+        padding: 0.5rem 0.75rem !important;
+    }
+
+    /* --- FIX: Walk-in details area --- */
+    .walkin-details-${id} .form-control {
+        min-height: 42px !important;
+        font-size: 0.95rem !important;
+        padding: 0.5rem 0.75rem !important;
+    }
+
+    /* --- FIX: Entry header --- */
+    .entry-block .text-primary {
+        font-size: 1.05rem !important;
+    }
+
+    /* --- FIX: Scroll wrapper padding --- */
+    .entries-scroll-wrapper {
+        max-height: 70vh;
+        padding: 20px 20px 15px 20px;
+    }
+
+    /* --- FIX: Remove button --- */
+    .entry-block .btn-danger.btn-sm {
+        padding: 0.4rem 0.9rem !important;
+        font-size: 0.85rem !important;
+    }
+
+    /* --- FIX: "Add Product" and "Save This Entry" buttons --- */
+    .entry-block .btn-success.btn-sm,
+    .entry-block .btn-primary.btn-sm {
+        padding: 0.5rem 1.2rem !important;
+        font-size: 0.9rem !important;
+        min-height: 40px !important;
+    }
+
+    /* --- FIX: Customer balance display --- */
+    .customer-balance-display {
+        font-size: 0.92rem !important;
+        padding: 12px 16px !important;
+        min-height: 55px !important;
+        border-radius: 8px !important;
+        margin-top: 10px !important;
+        margin-bottom: 10px !important;
+    }
+
+    .customer-balance-display strong {
+        font-size: 1rem !important;
+    }
+
+    /* --- FIX: Customer details cards --- */
+    #customerDetails .card-header {
+        font-size: 0.85rem !important;
+        padding: 6px 12px !important;
+    }
+
+    #customerDetails .card-body {
+        font-size: 0.9rem !important;
+        padding: 8px 12px !important;
+        min-height: 40px !important;
+    }
+
+    /* --- FIX: Toast notifications bigger --- */
+    .toast-custom {
+        font-size: 0.95rem !important;
+        padding: 14px 20px !important;
+        border-radius: 10px !important;
+    }
+
+    /* ============================================================
+       VIEW ENTRIES TABLE (TOP SECTION)
+       ============================================================ */
+    .daily-entry-table {
+        width: 100%;
+        table-layout: auto !important;
+        border-collapse: collapse;
+        min-width: 1400px;
+    }
+
+    .daily-entry-table th,
+    .daily-entry-table td {
+        white-space: normal !important;
+        word-wrap: break-word;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        padding: 10px 12px !important;
+        vertical-align: middle;
+        font-size: 0.88rem !important;
+    }
+
+    .daily-entry-table th {
+        font-size: 0.78rem !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.3px !important;
+    }
+
+    .daily-entry-table .col-calc,
+    .daily-entry-table .col-return {
+        min-width: 200px;
+        max-width: 350px;
+    }
+
+    .daily-entry-table .col-desc {
+        min-width: 160px;
+    }
+
+    /* Table container allows vertical and horizontal scroll with sticky headers */
+    .table-scroll-wrapper,
+    .table-scroll-container {
+        max-height: 72vh;
+        overflow-y: auto !important;
+        overflow-x: auto !important;
+        width: 100%;
+        position: relative;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .daily-entry-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background-color: #f8f9fa !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    }
+
+    .daily-entry-table tfoot td {
+        position: sticky;
+        bottom: 0;
+        z-index: 99;
+        background-color: #d1e7dd !important;
+        box-shadow: 0 -2px 4px rgba(0,0,0,0.08);
+    }
+
+    /* ============================================================
+       PRODUCT DETAILS MODAL
+       ============================================================ */
+    .product-details-modal {
+        border: 0;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 1rem 3rem rgba(15, 23, 42, 0.3);
+    }
+
+    .product-details-modal .modal-header {
+        padding: 1.25rem 1.5rem;
+    }
+
+    .product-details-modal .modal-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+    }
+
+    .product-details-modal .modal-body {
+        max-height: 70vh;
+        overflow-y: auto;
+        padding: 1.5rem;
+        background: #f8fafc;
+    }
+
+    .product-details-modal .form-control,
+    .product-details-modal .form-select {
+        min-height: 44px !important;
+        font-size: 0.95rem !important;
+        padding: 0.5rem 0.75rem !important;
+        border-radius: 6px !important;
+    }
+
+    .product-details-modal .form-label {
+        font-size: 0.85rem !important;
+        font-weight: 600 !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* ============================================================
+       SCROLLABLE ENTRIES WITH FIXED HEADER & FOOTER
+       ============================================================ */
+    .entries-scroll-wrapper {
+        max-height: 70vh;
+        overflow-y: auto;
+        padding: 15px 15px 10px 15px;
+        position: relative;
+    }
+
+    .entries-scroll-wrapper::-webkit-scrollbar {
+        width: 10px;
+    }
+
+    .entries-scroll-wrapper::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+
+    .entries-scroll-wrapper::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+    }
+
+    .entries-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+
+    /* Sticky Header */
+    .sticky-header {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: #0d6efd !important;
+    }
+
+    /* Sticky Footer */
+    .sticky-footer {
+        position: sticky;
+        bottom: 0;
+        z-index: 100;
+        background: #f8f9fa !important;
+        border-top: 2px solid #dee2e6;
+    }
+
+    /* Card body padding reset */
+    .card-body {
+        padding: 0 !important;
+    }
+
+    /* ============================================================
+       TOAST NOTIFICATIONS
+       ============================================================ */
+    .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        max-width: 450px;
+    }
+
+    .toast-custom {
+        background: #fff;
+        border-radius: 10px;
+        padding: 14px 20px;
+        margin-bottom: 12px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        border-left: 5px solid #28a745;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        animation: slideIn 0.3s ease;
+        font-size: 0.95rem !important;
+    }
+
+    .toast-custom.error {
+        border-left-color: #dc3545;
+    }
+
+    .toast-custom.warning {
+        border-left-color: #ffc107;
+    }
+
+    .toast-close {
+        background: none;
+        border: none;
+        font-size: 1.4rem;
+        cursor: pointer;
+        color: #999;
+        padding: 0 0 0 12px;
+    }
+
+    .toast-close:hover {
+        color: #333;
+    }
+
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0%); opacity: 1; }
+    }
+
+    /* ============================================================
+       RESPONSIVE ADJUSTMENTS
+       ============================================================ */
+    @media (max-width: 992px) {
+        .entries-scroll-wrapper {
+            max-height: 60vh;
+            padding: 12px 12px 8px 12px;
+        }
+        
+        .daily-products-table {
+            min-width: 1000px;
+        }
+        
+        .daily-entry-table {
+            min-width: 1200px;
+        }
+
+        .daily-products-table .product-row input,
+        .daily-products-table .product-row select {
+            font-size: 0.85rem !important;
+            min-height: 36px !important;
+            padding: 0.3rem 0.4rem !important;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .entries-scroll-wrapper {
+            max-height: 55vh;
+            padding: 10px 10px 5px 10px;
+        }
+        
+        .daily-products-table {
+            min-width: 900px;
+        }
+        
+        .daily-entry-table {
+            min-width: 1100px;
+        }
+
+        .entry-block {
+            padding: 1rem !important;
+        }
+
+        .daily-products-table .product-row > td {
+            padding: 6px 8px !important;
+            min-width: 60px !important;
+        }
+
+        .daily-products-table .product-row input,
+        .daily-products-table .product-row select {
+            font-size: 0.8rem !important;
+            min-height: 32px !important;
+            padding: 0.2rem 0.3rem !important;
+            min-width: 50px !important;
+        }
+
+        .daily-products-table .product-row > td::before {
+            font-size: 0.6rem !important;
+        }
+    }
+
+    /* Payment Only balance display */
+    #paymentCustomerBalance {
+        display: block !important;
+        font-size: 0.95rem !important;
+        padding: 12px 16px !important;
+        min-height: 55px !important;
+        transition: all 0.3s ease;
+        border-radius: 8px !important;
+        margin-top: 10px !important;
+    }
+
+    /* Spinner animation */
+    .fa-spin {
+        animation: fa-spin 2s infinite linear;
+    }
+
+    @keyframes fa-spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* ============================================================
+       IMPROVED: Entry block spacing
+       ============================================================ */
+    .entry-block .row.g-2 {
+        margin-bottom: 0.6rem !important;
+    }
+
+    .entry-block .row.g-2:last-child {
+        margin-bottom: 0 !important;
+    }
+
+    /* Make radio buttons and checkboxes bigger */
+    .entry-block .form-check-input {
+        width: 1.2rem !important;
+        height: 1.2rem !important;
+        margin-top: 0.15rem !important;
+    }
+
+    .entry-block .form-check-label {
+        font-size: 0.95rem !important;
+        padding-left: 0.3rem !important;
+    }
+
+    /* Toggle switch bigger */
+    .entry-block .form-switch .form-check-input {
+        width: 2.5rem !important;
+        height: 1.3rem !important;
+    }
+
+
+    /* FIX: Make all input fields wide enough for 1 million+ numbers */
+.daily-products-table input[type="number"],
+.daily-products-table input[type="text"],
+.daily-products-table select {
+    min-width: 100px !important;
+    font-size: 1.1rem !important;
+    padding: 0.5rem 0.7rem !important;
+    min-height: 46px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+</style>
+
+{% endblock %}

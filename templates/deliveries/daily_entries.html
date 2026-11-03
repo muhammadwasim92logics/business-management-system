@@ -1,0 +1,384 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Daily Entries - GBMS{% endblock %}
+{% block page_title %}📋 Daily Entries Report{% endblock %}
+
+{% block extra_css %}
+<style>
+    .daily-print-controls { display: flex; justify-content: center; gap: .5rem; }
+    @media print {
+        .daily-print-controls, .daily-filter-panel, .global-back-button, .sidebar,
+        .btn-toolbar, .main-content > .d-flex:first-child { display: none !important; }
+        .main-content { width: 100% !important; margin: 0 !important; padding: 0 !important; }
+        .daily-report-card, .daily-summary-card { break-inside: avoid; page-break-inside: avoid; box-shadow: none !important; }
+        .daily-report-card { border: 1px solid #999 !important; }
+        .daily-report-card .card-header { color: #000 !important; background: #e5e7eb !important; }
+        .daily-report-card .card-header h5, .daily-report-card .card-header small { color: #000 !important; }
+        .daily-report-card .table { font-size: 8pt; }
+        .daily-report-card .table-responsive { overflow: visible !important; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Date Navigation and Filter -->
+<div class="card mb-4 daily-filter-panel">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-4">
+                <form method="get" class="d-flex gap-2">
+                    <input type="date" name="date" class="form-control" value="{{ selected_date|date:'Y-m-d' }}">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search me-2"></i>View
+                    </button>
+                </form>
+            </div>
+            <div class="col-md-4">
+                <form method="get" class="d-flex gap-2">
+                    <input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+                    <select name="product" class="form-select" onchange="this.form.submit()">
+                        <option value="">All Products</option>
+                        {% for product in all_products %}
+                        <option value="{{ product }}" {% if product_filter == product %}selected{% endif %}>
+                            {{ product }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="?date={{ prev_date|date:'Y-m-d' }}{% if product_filter %}&product={{ product_filter }}{% endif %}" class="btn btn-secondary">
+                        <i class="fas fa-chevron-left me-2"></i>{{ prev_date|date:'d M' }}
+                    </a>
+                    <span class="btn btn-primary disabled">
+                        <strong>{{ selected_date|date:'d M Y' }}</strong>
+                    </span>
+                    <a href="?date={{ next_date|date:'Y-m-d' }}{% if product_filter %}&product={{ product_filter }}{% endif %}" class="btn btn-secondary {% if not has_next %}disabled{% endif %}">
+                        {{ next_date|date:'d M' }}<i class="fas fa-chevron-right ms-2"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% if product_filter %}
+        <div class="mt-2">
+            <span class="badge bg-primary">Filter: {{ product_filter }}</span>
+            <a href="?date={{ selected_date|date:'Y-m-d' }}" class="btn btn-sm btn-outline-secondary ms-2">
+                <i class="fas fa-times"></i> Clear Filter
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card stat-card border-primary">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-primary me-3">
+                    <i class="fas fa-receipt"></i>
+                </div>
+                <div>
+                    <small class="text-muted stat-label">Total Activities</small>
+                    <h3 class="stat-number">{{ total_activities }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card border-success">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-success me-3">
+                    <i class="fas fa-truck"></i>
+                </div>
+                <div>
+                    <small class="text-muted stat-label">Total Deliveries</small>
+                    <h3 class="stat-number text-success">{{ total_deliveries }}</h3>
+                    <small>PKR {{ total_delivery_amount|floatformat:0 }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card border-danger">
+            <div class="d-flex align-items-center">
+                <div class="icon icon-danger me-3">
+                    <i class="fas fa-hand-holding-usd"></i>
+                </div>
+                <div>
+                    <small class="text-muted stat-label">Total Payments</small>
+                    <h3 class="stat-number text-danger">{{ total_payments }}</h3>
+                    <small>PKR {{ total_payment_amount|floatformat:0 }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Product Summary -->
+{% if product_summary %}
+<div class="card mb-4 daily-summary-card">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Product Summary</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered">
+                <thead class="table-light">
+                    <tr>
+                        <th>Product</th>
+                        <th class="text-center">Customers</th>
+                        <th class="text-center">Total Taken</th>
+                        <th class="text-center">Empty Returned</th>
+                        <th class="text-center">Net Cylinders</th>
+                        <th class="text-end">Total Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for prod in product_summary %}
+                    <tr>
+                        <td><strong>{{ prod.product_name }}</strong></td>
+                        <td class="text-center">{{ prod.customer_count }}</td>
+                        <td class="text-center">{{ prod.total_quantity }}</td>
+                        <td class="text-center">{{ prod.total_empty }}</td>
+                        <td class="text-center">
+                            <span class="badge {% if prod.total_quantity > prod.total_empty %}bg-danger{% elif prod.total_quantity == prod.total_empty %}bg-success{% else %}bg-warning{% endif %}">
+                                {{ prod.total_quantity|add:"-"|add:prod.total_empty }}
+                            </span>
+                        </td>
+                        <td class="text-end">PKR {{ prod.total_amount|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-success">
+                    <tr>
+                        <td><strong>Grand Total</strong></td>
+                        <td class="text-center">{{ total_deliveries }}</td>
+                        <td class="text-center"><strong>{{ total_quantity }}</strong></td>
+                        <td class="text-center"><strong>{{ total_empty_returned }}</strong></td>
+                        <td class="text-center">
+                            <strong>{{ total_quantity|add:"-"|add:total_empty_returned }}</strong>
+                        </td>
+                        <td class="text-end"><strong>PKR {{ total_amount|floatformat:2 }}</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Entries List - GROUPED VERSION WITH CLEAR LABELS -->
+{% if activities %}
+    {% for customer_data in customer_data %}
+    <div class="card mb-4 daily-report-card">
+        <div class="card-header bg-primary text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h5 class="mb-0">
+                        <i class="fas fa-user me-2"></i>
+                        {{ customer_data.customer_name }}
+                    </h5>
+                    <small>
+                        <i class="fas fa-phone me-1"></i>{{ customer_data.customer_mobile }}
+                        {% if customer_data.customer.area %}
+                        | <i class="fas fa-map-marker-alt me-1"></i>{{ customer_data.customer.area }}
+                        {% endif %}
+                    </small>
+                </div>
+                <div>
+                    <span class="badge bg-light text-dark me-2">
+                        {{ customer_data.activities|length }} entries
+                    </span>
+                    <span class="badge bg-success">
+                        Balance: PKR {{ customer_data.total_amount|floatformat:2 }}
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Time</th>
+                            <th>Items</th>
+                            <th class="text-center">Empty (MT)</th>
+                            <th class="text-center">Full (Fill)</th>
+                            <th class="text-center">Sale Qty</th>
+                            <th class="text-end">Total Before Delivery Charges</th>
+                            <th class="text-end">Delivery Charges</th>
+                            <th class="text-end">Total After Delivery Charges</th>
+                            <th class="text-end">Payment Received</th>
+                            <th class="text-end">Balance Due</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for activity in customer_data.activities %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td>
+                                <span class="badge bg-secondary">
+                                    <i class="far fa-clock me-1"></i>
+                                    {{ activity.created_time }}
+                                </span>
+                                <br><small class="text-muted">{{ activity.created_date }}</small>
+                            </td>
+                            <td>
+                                {% if activity.type == 'delivery_group' %}
+                                    <div class="text-start">
+                                        {% for item in activity.items %}
+                                        <div class="d-flex justify-content-between align-items-center border-bottom py-1">
+                                            <span>
+                                                <strong>{{ item.product }}</strong>
+                                                {% if item.is_quantity_only %}
+                                                    <span class="badge bg-info text-dark ms-1">Sale Only</span>
+                                                {% endif %}
+                                            </span>
+                                            <span class="text-muted">
+                                                {% if item.is_quantity_only %}
+                                                    Sale Qty: {{ item.quantity }}
+                                                {% else %}
+                                                    Qty: {{ item.quantity }} | Returned: {{ item.empty_returned }}
+                                                {% endif %}
+                                            </span>
+                                            <span class="text-primary">PKR {{ item.amount|floatformat:2 }}</span>
+                                        </div>
+                                        {% endfor %}
+                                        <small class="text-muted d-block mt-1">
+                                            {% for d in activity.deliveries %}
+                                            {{ d.delivery_no }}{% if not forloop.last %}, {% endif %}
+                                            {% endfor %}
+                                        </small>
+                                    </div>
+                                    {% if activity.has_payment %}
+                                    <div class="mt-1 p-1 bg-light rounded" style="font-size: 0.85rem;">
+                                        <span class="text-success">💳 {{ activity.payment_type }}: PKR {{ activity.payment_amount|floatformat:2 }}</span>
+                                    </div>
+                                    {% endif %}
+                                {% else %}
+                                    <strong>💳 Payment Only</strong>
+                                    <small class="text-muted d-block">{{ activity.delivery_no }}</small>
+                                    <small class="text-muted">{{ activity.payment_type }}</small>
+                                    <br>
+                                    <small class="text-muted">Balance: PKR {{ activity.outstanding_after|floatformat:2 }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if activity.type == 'delivery_group' and not activity.items.0.is_quantity_only %}
+                                    <strong>{{ activity.total_empty }}</strong>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if activity.type == 'delivery_group' and not activity.items.0.is_quantity_only %}
+                                    <strong>{{ activity.total_quantity }}</strong>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if activity.type == 'delivery_group' and activity.items.0.is_quantity_only %}
+                                    <span class="badge bg-primary">{{ activity.total_quantity }}</span>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if activity.type == 'delivery_group' %}
+                                    <span class="text-primary fw-bold">PKR {{ activity.total_before_delivery_charges|floatformat:2 }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if activity.type == 'delivery_group' %}
+                                    <span class="text-warning fw-bold">PKR {{ activity.delivery_charges|floatformat:2 }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if activity.type == 'delivery_group' %}
+                                    <span class="text-primary fw-bold">PKR {{ activity.delivery_amount|floatformat:2 }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if activity.has_payment and activity.payment_amount %}
+                                    <span class="text-success fw-bold">PKR {{ activity.payment_amount|floatformat:2 }}</span>
+                                {% elif activity.type == 'payment_only' %}
+                                    <span class="text-success fw-bold">PKR {{ activity.payment_amount|floatformat:2 }}</span>
+                                {% else %}
+                                    <span class="text-muted">0.00</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if activity.outstanding_after is not None %}
+                                    <span class="fw-bold {% if activity.outstanding_after > 0 %}text-danger{% else %}text-success{% endif %}">
+                                        PKR {{ activity.outstanding_after|floatformat:2 }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-success">
+                        <tr>
+                            <td colspan="5"><strong>TOTAL</strong></td>
+                            <td class="text-end"><strong>PKR {{ customer_data.total_before_delivery_charges|floatformat:2 }}</strong></td>
+                            <td class="text-end"><strong>PKR {{ customer_data.total_delivery_charges|floatformat:2 }}</strong></td>
+                            <td class="text-end"><strong>PKR {{ customer_data.total_delivery_amount|floatformat:2 }}</strong></td>
+                            <td class="text-end"><strong>PKR {{ customer_data.total_payments|floatformat:2 }}</strong></td>
+                            <td class="text-end"><strong>PKR {{ customer_data.total_amount|floatformat:2 }}</strong></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+            <h5>No Entries Found</h5>
+            <p class="text-muted">No activities recorded for <strong>{{ selected_date|date:'l, d F Y' }}</strong></p>
+            {% if product_filter %}
+            <p class="text-muted">Filter: {{ product_filter }}</p>
+            {% endif %}
+            <div class="d-flex justify-content-center gap-2">
+                <a href="{% url 'deliveries:daily_entry_add' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>Add Delivery
+                </a>
+                <a href="{% url 'deliveries:payment_only' %}" class="btn btn-success">
+                    <i class="fas fa-hand-holding-usd me-2"></i>Record Payment
+                </a>
+            </div>
+        </div>
+    </div>
+{% endif %}
+
+<!-- Print and Export -->
+<div class="mt-3 daily-print-controls">
+    <button onclick="window.print()" class="btn btn-secondary">
+        <i class="fas fa-print me-2"></i>Print Report
+    </button>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auto-submit when date changes
+    document.querySelector('input[type="date"]').addEventListener('change', function() {
+        this.closest('form').submit();
+    });
+</script>
+{% endblock %}

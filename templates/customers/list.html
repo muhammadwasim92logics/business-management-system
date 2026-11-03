@@ -1,0 +1,250 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Customers - GBMS{% endblock %}
+{% block page_title %}Customer Management{% endblock %}
+
+{% block content %}
+{% include 'customers/_toast_feedback.html' %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <p class="text-muted mb-0">Manage your customer database</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'customers:add' %}" class="btn btn-primary">
+            <i class="fas fa-user-plus me-2"></i>Add Customer
+        </a>
+    </div>
+</div>
+
+<!-- Search and Filter -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-6">
+                <label class="form-label">Search Customer</label>
+                <select name="customer_id" class="form-select" onchange="this.form.submit()">
+                    <option value="">-- All Customers --</option>
+                    {% for customer in customer_options %}
+                    <option value="{{ customer.pk }}" {% if selected_customer_id == customer.pk|stringformat:"s" %}selected{% endif %}>
+                        {{ customer.name }} ({{ customer.customer_code }}) - {{ customer.mobile }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Search by mobile, area or code</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" name="search" class="form-control"
+                           placeholder="Search by name, mobile, area or code..."
+                           value="{{ search }}">
+                </div>
+            </div>
+            <div class="col-md-2">
+                <select name="status" class="form-select">
+                    <option value="">All Status</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label mb-1">Date From</label>
+                <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label mb-1">Date To</label>
+                <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-secondary w-100">
+                    <i class="fas fa-filter me-2"></i>Filter
+                </button>
+            </div>
+        </form>
+
+        <div class="mt-3">
+            <span class="text-muted me-2">Quick filters:</span>
+            <a href="?search={{ search }}&customer_id={{ selected_customer_id }}&status={{ current_status }}&date_from={{ today|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-outline-primary">Today</a>
+            <a href="?search={{ search }}&customer_id={{ selected_customer_id }}&status={{ current_status }}&date_from={{ week_start|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-outline-primary">This Week</a>
+            <a href="?search={{ search }}&customer_id={{ selected_customer_id }}&status={{ current_status }}&date_from={{ month_start|date:'Y-m-d' }}&date_to={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-outline-primary">This Month</a>
+            <a href="?search={{ search }}&customer_id={{ selected_customer_id }}&status={{ current_status }}" class="btn btn-sm btn-outline-secondary">All</a>
+        </div>
+        <form method="get" action="{% url 'customers:print' %}" class="customer-print-controls mt-4">
+            <input type="hidden" name="search" value="{{ search }}">
+            <input type="hidden" name="customer_id" value="{{ selected_customer_id }}">
+            <input type="hidden" name="status" value="{{ current_status }}">
+            <input type="hidden" name="date_from" value="{{ date_from }}">
+            <input type="hidden" name="date_to" value="{{ date_to }}">
+            <input type="hidden" name="page" value="{{ page_obj.number|default:1 }}">
+            <div>
+                <label for="print-mode" class="form-label mb-1"><i class="fas fa-print me-1"></i>Print customer list</label>
+                <select id="print-mode" name="print_mode" class="form-select form-select-sm">
+                    <option value="current">Current page</option>
+                    <option value="all">All matching customers</option>
+                    <option value="range">Page range</option>
+                </select>
+            </div>
+            <div class="print-range-inputs" hidden>
+                <label class="form-label mb-1">From page</label>
+                <input type="number" name="page_from" class="form-control form-control-sm" min="1" value="1">
+            </div>
+            <div class="print-range-inputs" hidden>
+                <label class="form-label mb-1">To page</label>
+                <input type="number" name="page_to" class="form-control form-control-sm" min="1" value="{{ paginator.num_pages|default:1 }}">
+            </div>
+            <button type="submit" class="btn btn-outline-primary btn-sm"><i class="fas fa-print me-1"></i>Open print view</button>
+        </form>
+    </div>
+</div>
+
+<!-- Customer Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Name</th>
+                        <th>Mobile</th>
+                        <th>Area</th>
+                        <th>Last Activity</th>
+                        <th>Status</th>
+                        <th>Cylinders</th>
+                        <th class="text-end">Balance</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for customer in customers %}
+                    <tr>
+                        <td><strong>{{ customer.customer_code }}</strong></td>
+                        <td>{{ customer.name }}</td>
+                        <td>{{ customer.mobile }}</td>
+                        <td>{{ customer.area|default:"—" }}</td>
+                        <td>{{ customer.last_activity_date|default:"No activity" }}</td>
+                        <td>
+                            <span class="badge {{ customer.get_status_class }}">
+                                {{ customer.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% for product_name, quantity in customer.cylinder_balance.items %}
+                            <div class="text-nowrap">{{ product_name }}: <strong>{{ quantity }}</strong></div>
+                            {% empty %}
+                            <span class="text-muted">None</span>
+                            {% endfor %}
+                        </td>
+                        <td class="text-end">
+                            <span class="{% if customer.get_outstanding_balance > 0 %}text-danger{% else %}text-success{% endif %}">
+                                PKR {{ customer.get_outstanding_balance|floatformat:2 }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <a href="{% url 'customers:detail' customer.pk %}" class="btn btn-sm btn-info" title="View Profile">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            <a href="{% url 'customers:edit' customer.pk %}" class="btn btn-sm btn-primary" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <a href="{% url 'deliveries:add' %}?customer={{ customer.pk }}" class="btn btn-sm btn-success" title="Add Delivery">
+                                <i class="fas fa-plus"></i>
+                            </a>
+                            <button type="button" class="btn btn-sm btn-danger" title="Delete customer"
+                                    data-bs-toggle="modal" data-bs-target="#deleteCustomer{{ customer.pk }}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    <div class="modal fade" id="deleteCustomer{{ customer.pk }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header bg-danger text-white">
+                                    <h5 class="modal-title"><i class="fas fa-triangle-exclamation me-2"></i>Delete Customer</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <p class="fw-bold mb-2">Are you sure you want to delete {{ customer.name }} ({{ customer.customer_code }})?</p>
+                                    <p class="text-danger">This permanently deletes all of this customer's deliveries, payments, cylinder records, FBR records, notifications, and profile data from the entire system.</p>
+                                    <div class="alert alert-warning mb-0">
+                                        <div><strong>Outstanding balance:</strong> PKR {{ customer.get_outstanding_balance|floatformat:2 }}</div>
+                                        <div class="mt-2"><strong>Cylinder balance:</strong></div>
+                                        {% for product_name, quantity in customer.cylinder_balance.items %}
+                                            <div class="ms-3">
+                                                {{ product_name }}: {{ quantity }}
+                                                {% if quantity > 0 %}(with customer){% elif quantity < 0 %}(customer must return){% else %}(balanced){% endif %}
+                                            </div>
+                                        {% empty %}
+                                            <div class="ms-3">No cylinder balance</div>
+                                        {% endfor %}
+                                    </div>
+                                    <p class="mt-3 mb-0 fw-bold">Previous purchases will not be added back to product stock.</p>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <form method="post" action="{% url 'customers:delete' customer.pk %}">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-danger">
+                                            <i class="fas fa-trash me-1"></i>Delete Permanently
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-4 text-muted">
+                            <i class="fas fa-users fa-2x mb-2 d-block"></i>
+                            No customers found. 
+                            <a href="{% url 'customers:add' %}" class="text-primary">Add your first customer</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <nav class="mt-3">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&search={{ search }}&customer_id={{ selected_customer_id }}&status={{ current_status }}&date_from={{ date_from }}&date_to={{ date_to }}">
+                        Previous
+                    </a>
+                </li>
+                {% endif %}
+
+                <li class="page-item active">
+                    <span class="page-link">{{ page_obj.number }}</span>
+                </li>
+
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&search={{ search }}&customer_id={{ selected_customer_id }}&status={{ current_status }}&date_from={{ date_from }}&date_to={{ date_to }}">
+                        Next
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const printMode = document.getElementById('print-mode');
+    const rangeInputs = document.querySelectorAll('.print-range-inputs');
+    if (printMode) {
+        printMode.addEventListener('change', function () {
+            rangeInputs.forEach(function (field) { field.hidden = printMode.value !== 'range'; });
+        });
+    }
+</script>
+{% endblock %}

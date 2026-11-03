@@ -1,0 +1,274 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load fbr_filters %}
+
+{% block title %}FBR Invoices - GBMS{% endblock %}
+{% block page_title %}🧾 FBR Invoices{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="fas fa-receipt me-2"></i>FBR Invoices
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end" id="fbrInvoicesForm">
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Select Customers</label>
+                <div id="customerCheckboxContainer" class="border rounded p-3" style="max-height: 480px; min-height: 380px; overflow-y: auto; background-color: #f8f9fa;">
+                    {% for customer in customers %}
+                    <div class="form-check mb-2">
+                        <input class="form-check-input customer-checkbox" type="checkbox" name="customer_id" id="customer_{{ customer.pk }}" value="{{ customer.pk }}" {% if customer.pk|stringformat:'s' in selected_customer_ids %}checked{% endif %}>
+                        <label class="form-check-label w-100" for="customer_{{ customer.pk }}" style="cursor: pointer;">
+                            <strong>{{ customer.name }}</strong> 
+                            <span class="text-muted">({{ customer.customer_code }})</span> 
+                            <span class="text-muted small">{{ customer.mobile }}</span>
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                <small class="text-muted mt-2 d-block">
+                    <i class="fas fa-info-circle"></i> Select multiple customers to view their invoices
+                </small>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold">Date From</label>
+                <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold">Date To</label>
+                <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+            </div>
+            <div class="col-md-12 mt-3">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-search me-1"></i>View Invoices
+                </button>
+                <a href="{% url 'fbr:invoices' %}" class="btn btn-outline-secondary">Reset</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Invoice Results Table -->
+{% if selected_customers %}
+<div class="card">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">
+            <i class="fas fa-file-invoice me-2"></i>
+            FBR Invoice Results
+            <span class="badge bg-light text-dark ms-2">{{ selected_customers|length }} Customer(s) Selected</span>
+        </h5>
+    </div>
+    <div class="card-body">
+        {% if invoice_rows %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle" id="fbrInvoicesTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th>SR NO</th>
+                        <th>CUSTOMER</th>
+                        <th>DATE</th>
+                        <th>INVOICE NO</th>
+                        <th>NTN</th>
+                        <th>STN</th>
+                        <th>PRODUCT</th>
+                        <th class="text-center">QTY (KG)</th>
+                        <th class="text-end">RATE</th>
+                        <th class="text-end">SUBTOTAL<br><small>(WITHOUT TAX)</small></th>
+                        <th class="text-end">GST(18%)</th>
+                        <th class="text-end">TOTAL<br><small>(SUBTOTAL + GST)</small></th>
+                        <th class="text-center">ACTIONS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in invoice_rows %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td><strong>{{ row.customer_name }}</strong></td>
+                        <td>{{ row.date|date:"d/m/Y" }}</td>
+                        <td>
+                            <span class="badge bg-primary">{{ row.invoice_no }}</span>
+                        </td>
+                        <td>{{ row.ntn }}</td>
+                        <td>{{ row.stn }}</td>
+                        <td>{{ row.item_description }}</td>
+                        <td class="text-center">
+                            <span class="money-display" tabindex="0" role="button"
+                                  title="Full value: {{ row.quantity|precise_decimal }}"
+                                  data-bs-toggle="popover"
+                                  data-bs-trigger="hover focus click"
+                                  data-bs-placement="top"
+                                  data-bs-content="Full value: {{ row.quantity|precise_decimal }}">
+                                {{ row.quantity|compact_decimal }}
+                            </span>
+                        </td>
+                        <td class="text-end">PKR {{ row.rate|truncate_decimal }}</td>
+                        <td class="text-end">PKR {{ row.ex_value|truncate_decimal }}</td>
+                        <td class="text-end">PKR {{ row.gst_amount|truncate_decimal }}</td>
+                        <td class="text-end"><strong>PKR {{ row.total_value|truncate_decimal }}</strong></td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-info" onclick="openCustomerSettingsModal('{{ row.customer_id }}')" title="Edit Settings">
+                                <i class="fas fa-cog"></i> Actions
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>No invoices found for the selected customers and date range.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Customer Settings Modal -->
+<div class="modal fade" id="customerSettingsModal" tabindex="-1" aria-labelledby="customerSettingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="customerSettingsModalLabel">
+                    <i class="fas fa-edit me-2"></i>Edit FBR Settings
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="customerSettingsForm">
+                    <input type="hidden" id="modalCustomerId" value="">
+                    
+                    <div class="mb-3">
+                        <label for="modalInvoiceNumber" class="form-label fw-bold">Invoice Number</label>
+                        <input type="text" class="form-control" id="modalInvoiceNumber" placeholder="e.g., INV-2026-001">
+                        <small class="text-muted">This invoice number will be used for all future transactions</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="modalSTN" class="form-label fw-bold">STN (Sales Tax Number)</label>
+                        <input type="text" class="form-control" id="modalSTN" placeholder="e.g., STN-1234567890">
+                        <small class="text-muted">Persistent Sales Tax Number for this customer</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="modalNTN" class="form-label fw-bold">NTN (National Tax Number)</label>
+                        <input type="text" class="form-control" id="modalNTN" placeholder="e.g., NTN-0987654321">
+                        <small class="text-muted">Persistent National Tax Number for this customer</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-info" onclick="saveCustomerSettings()">
+                    <i class="fas fa-save me-1"></i>Save Settings
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    #customerCheckboxContainer {
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+    }
+    
+    #customerCheckboxContainer:hover {
+        background-color: #f5f5f5;
+    }
+    
+    .form-check {
+        padding: 0.5rem 0;
+    }
+    
+    .form-check-label {
+        margin-bottom: 0 !important;
+    }
+    
+    #fbrInvoicesTable thead th {
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    #fbrInvoicesTable tbody td {
+        font-size: 0.9rem;
+        vertical-align: middle;
+    }
+    
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.4rem 0.6rem;
+    }
+</style>
+
+<script>
+    let modalCustomerId = null;
+    const modal = new bootstrap.Modal(document.getElementById('customerSettingsModal'));
+    
+    function openCustomerSettingsModal(customerId) {
+        modalCustomerId = customerId;
+        
+        // Load saved settings if they exist
+        const savedSettings = {{ customer_fbr_settings|safe }};
+        if (savedSettings && savedSettings[customerId]) {
+            document.getElementById('modalInvoiceNumber').value = savedSettings[customerId].invoice_number || '';
+            document.getElementById('modalSTN').value = savedSettings[customerId].stn || '';
+            document.getElementById('modalNTN').value = savedSettings[customerId].ntn || '';
+        } else {
+            document.getElementById('modalInvoiceNumber').value = '';
+            document.getElementById('modalSTN').value = '';
+            document.getElementById('modalNTN').value = '';
+        }
+        
+        document.getElementById('modalCustomerId').value = customerId;
+        modal.show();
+    }
+    
+    function saveCustomerSettings() {
+        const customerId = document.getElementById('modalCustomerId').value;
+        const invoiceNumber = document.getElementById('modalInvoiceNumber').value;
+        const stn = document.getElementById('modalSTN').value;
+        const ntn = document.getElementById('modalNTN').value;
+        
+        fetch('{% url "fbr:save_customer_setting" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                customer_id: customerId,
+                invoice_number: invoiceNumber,
+                stn: stn,
+                ntn: ntn
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert('Settings saved successfully!');
+                modal.hide();
+                // Reload the page to show updated data
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while saving settings');
+        });
+    }
+    
+    // Handle checkbox changes to trigger form submission
+    document.querySelectorAll('.customer-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            // Auto-submit form when checkboxes change
+            document.getElementById('fbrInvoicesForm').submit();
+        });
+    });
+</script>
+
+{% endblock %}
